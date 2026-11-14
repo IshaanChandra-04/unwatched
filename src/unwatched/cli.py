@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from unwatched import __version__
+from unwatched.build import run_build
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
 from unwatched.state import load_state
@@ -44,6 +45,9 @@ def _parser() -> argparse.ArgumentParser:
     ingest.add_argument(
         "--seen", action="store_true", help="record these posts as already processed"
     )
+    build = subs["build"]
+    build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
+    build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
     return p
 
 
@@ -73,7 +77,14 @@ def cmd_ingest(args) -> int:
     return 0
 
 
-_COMMANDS = {"status": cmd_status, "ingest": cmd_ingest}
+def cmd_build(args) -> int:
+    out = args.out or args.work / "digest-input.md"
+    n = run_build(args.work, out, args.new_only)
+    print(f"wrote {out} with {n} posts")
+    return 0
+
+
+_COMMANDS = {"status": cmd_status, "ingest": cmd_ingest, "build": cmd_build}
 
 
 def main(argv: list[str] | None = None) -> int:
