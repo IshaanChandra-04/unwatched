@@ -118,7 +118,7 @@ def login(profile_dir: Path = PROFILE_DIR, timeout_s: int = 600) -> bool:
         page.goto("https://www.instagram.com/")
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            if _has_session(ctx):
+            if _has_session(ctx) and not _is_blocked(page.url):
                 return True
             time.sleep(2)
         return False
@@ -244,7 +244,8 @@ def sweep_dm(
         _wait_for_content(page, _COLLECT_JS)
         # the tab title is "Instagram • Messages"; the thread's name is the conversation header
         header = page.evaluate(_THREAD_HEADER_JS) or ""
-        name = header.strip() or re.sub(r"\W+", "", urlparse(url).path.rsplit("/", 2)[-2])
+        segment = urlparse(url).path.rstrip("/").rsplit("/", 1)[-1]
+        name = header.strip() or re.sub(r"\W+", "", segment)
         codes = _sweep(page, _COLLECT_JS, _SCROLL_UP_JS, known, full, stop_after_known, wait_ms)
     log.info("dm sweep of %s found %d new", name, len(codes))
     return _found(codes, "dm", name)
