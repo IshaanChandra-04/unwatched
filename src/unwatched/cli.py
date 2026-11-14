@@ -10,6 +10,7 @@ from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
 from unwatched.state import load_state
+from unwatched.transcribe import run_transcribe
 
 EXIT_LOGIN = 3
 EXIT_CAP = 4
@@ -55,6 +56,10 @@ def _parser() -> argparse.ArgumentParser:
     fetch.add_argument("--only", nargs="*", metavar="CODE", help="fetch exactly these codes")
     fetch.add_argument("--cookies", type=Path, help=f"cookies.txt; default {COOKIES_PATH}")
     fetch.add_argument("--ytdlp", default="yt-dlp", help="yt-dlp executable")
+    transcribe = subs["transcribe"]
+    transcribe.add_argument("--model", default="small", help="small (default) or large-v3-turbo")
+    transcribe.add_argument("--language", default="en", help="language code, or auto")
+    transcribe.add_argument("--only", nargs="*", metavar="CODE", help="re-run exactly these codes")
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -109,11 +114,20 @@ def cmd_fetch(args) -> int:
     return 0
 
 
+def cmd_transcribe(args) -> int:
+    language = None if args.language == "auto" else args.language
+    only = set(args.only) if args.only else None
+    n = run_transcribe(args.work, load_posts(args.work), args.model, language, only)
+    print(f"transcribed {n}")
+    return 0
+
+
 _COMMANDS = {
     "status": cmd_status,
     "ingest": cmd_ingest,
     "build": cmd_build,
     "fetch": cmd_fetch,
+    "transcribe": cmd_transcribe,
 }
 
 
