@@ -1,0 +1,23 @@
+# Copy this file somewhere outside the repo (for example ~/.unwatched/unwatched.toml)
+# and point `unwatched run --config <path>` at it. Relative paths resolve from the
+# folder this file is in.
+
+work = "C:/Users/me/unwatched-work"
+profile = "C:/path/to/unwatched/profiles/tech.md"
+master = "C:/Users/me/Documents/reels/master.md"
+digest = false            # true runs `claude -p` after each run to update the master document
+
+[sources]
+dm = ["https://www.instagram.com/direct/t/<thread-id>/"]
+saved = true
+links = []                # text files with Instagram links in them
+export = []               # "Download your information" zips or folders, for backfill
+
+[fetch]
+kinds = ["saved", "dm"]   # add "liked" or "archived" on purpose; likes can be thousands
+max = 300                 # the run stops before fetching if more posts than this are selected
+delay = 3                 # seconds between posts
+
+[transcribe]
+model = "small"           # or "large-v3-turbo": better names, about five times slower
+language = "en"
