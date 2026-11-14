@@ -62,9 +62,11 @@ _PROFILE_LINK_JS = """
   return a ? a.getAttribute('href') : null;
 }
 """
+# A collection link is /<user>/saved/<name>/<numeric id>/; the saved page's own tabs
+# (all-posts, audio, ...) have no id and are not grids of posts.
 _COLLECTIONS_JS = """
 () => [...document.querySelectorAll('a[href*="/saved/"]')]
-  .filter(a => !a.href.includes('all-posts') && a.innerText.trim())
+  .filter(a => /\\/saved\\/[^/]+\\/\\d+\\/?$/.test(a.href) && a.innerText.trim())
   .map(a => [a.href, a.innerText.trim().split('\\n')[0]])
 """
 
