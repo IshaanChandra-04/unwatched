@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `ingest --dm`: a thread URL without a trailing slash names the thread after its id, not `t`.
+- `login`: a session cookie on Instagram's login or challenge page no longer counts as signed in,
+  so a session Instagram invalidated does not loop through "run unwatched login".
+- `fetch`: a post whose fetch keeps failing (deleted, private) is given up after three attempts
+  instead of being hit every day; the attempts are counted as `retries` in its meta file.
+- `fetch --kinds "saved, dm"`: spaces around the kind names are ignored.
+- `ingest --seen` after a digest: the seeded posts no longer surface in the next digest.
+- `build`: a post whose fetch failed shows `?` as its type in the index, not `None`.
+- Config: `~` in `work`, `profile`, `master`, `sources.links` and `sources.export` is the home
+  folder.
+
+### Changed
+
+- `build`: captions and transcripts are rendered as blockquotes, so headless Claude reads them as
+  quoted data rather than as part of the prompt.
+- `run`: the dated log holds only unwatched's lines; `huggingface_hub` and `faster_whisper` log at
+  WARNING and above.
+- `schedule install` checks that `--config` exists and parses before registering the task.
+
+### Security
+
+- `digest`: the headless `claude -p` run passes `--strict-mcp-config`, so the daily job loads none
+  of the user's MCP servers.
+- CI pins `actions/checkout` and `astral-sh/setup-uv` to commit SHAs; Dependabot keeps them
+  current.
+
 ## [0.1.0] - 2026-11-14
 
 ### Added
