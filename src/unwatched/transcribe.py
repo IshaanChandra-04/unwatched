@@ -21,6 +21,9 @@ def todo(work: Path, posts: dict[str, dict], only: set[str] | None) -> list[str]
     codes = sorted(only) if only is not None else sorted(posts)
     out = []
     for code in codes:
+        # only fetched posts: a kind the user opted out of has audio in the export but no meta
+        if not (work / "meta" / f"{code}.json").exists():
+            continue
         if audio_path(work, code, posts) is None:
             continue
         if only is None and (work / "transcripts" / f"{code}.txt").exists():

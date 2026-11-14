@@ -6,17 +6,14 @@ from pathlib import Path
 
 from unwatched import __version__, schedule
 from unwatched.build import run_build
+from unwatched.config import load_config
 from unwatched.digest import run_digest
 from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
+from unwatched.run import EXIT_CAP, EXIT_DIGEST, EXIT_LOGIN, LOGIN_MESSAGE, run_all
 from unwatched.state import load_state
 from unwatched.transcribe import run_transcribe
-
-EXIT_LOGIN = 3
-EXIT_CAP = 4
-EXIT_DIGEST = 5
-LOGIN_MESSAGE = "sign-in expired, run: unwatched login"
 
 _HELP = {
     "status": "show the last run and anything that needs you",
@@ -71,6 +68,8 @@ def _parser() -> argparse.ArgumentParser:
     digest.add_argument("--master", type=Path, required=True, help="master document to update")
     digest.add_argument("--claude", default="claude", help="Claude Code executable")
     digest.add_argument("--max-turns", type=int, default=40)
+    run = subs["run"]
+    run.add_argument("--config", type=Path, required=True, help="unwatched.toml")
     schedule = subs["schedule"]
     schedule.add_argument("action", choices=["install", "remove", "status"])
     schedule.add_argument("--at", default="15:00", help="daily time, HH:MM (default 15:00)")
@@ -187,6 +186,10 @@ def cmd_schedule(args) -> int:
     return 0
 
 
+def cmd_run(args) -> int:
+    return run_all(load_config(args.config))
+
+
 _COMMANDS = {
     "status": cmd_status,
     "ingest": cmd_ingest,
@@ -196,6 +199,7 @@ _COMMANDS = {
     "login": cmd_login,
     "digest": cmd_digest,
     "schedule": cmd_schedule,
+    "run": cmd_run,
 }
 
 

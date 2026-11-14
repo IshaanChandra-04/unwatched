@@ -8,8 +8,10 @@ def test_todo_skips_done_and_forces_only(tmp_path):
     posts = {}
     for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"):
         add_source(posts, code, SRC)
-    (tmp_path / "audio").mkdir()
-    (tmp_path / "transcripts").mkdir()
+    for d in ("audio", "transcripts", "meta"):
+        (tmp_path / d).mkdir()
+    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"):
+        (tmp_path / "meta" / f"{code}.json").write_text("{}", encoding="utf-8")
     (tmp_path / "audio" / "AAAAAAAAAAA.m4a").touch()
     (tmp_path / "audio" / "BBBBBBBBBBB.m4a").touch()
     (tmp_path / "transcripts" / "BBBBBBBBBBB.txt").write_text("done", encoding="utf-8")
