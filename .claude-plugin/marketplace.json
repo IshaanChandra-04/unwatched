@@ -1,0 +1,13 @@
+{
+  "name": "unwatched",
+  "owner": {
+    "name": "<owner>"
+  },
+  "plugins": [
+    {
+      "name": "unwatched",
+      "source": "./",
+      "description": "Turn the reels you saved or sent yourself into a document you will actually read."
+    }
+  ]
+}

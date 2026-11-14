@@ -1,0 +1,13 @@
+{
+  "name": "unwatched",
+  "version": "0.1.0",
+  "description": "Turn the reels you saved or sent yourself into a document you will actually read.",
+  "author": {
+    "name": "<owner>",
+    "url": "https://github.com/<handle>"
+  },
+  "homepage": "https://github.com/<handle>/unwatched",
+  "repository": "https://github.com/<handle>/unwatched",
+  "license": "MIT",
+  "keywords": ["instagram", "reels", "transcription", "knowledge-base"]
+}
