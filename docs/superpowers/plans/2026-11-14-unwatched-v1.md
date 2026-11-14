@@ -86,29 +86,48 @@ git commit -m "chore: scaffold unwatched package, tooling and CI" -m "Co-Authore
 ```python
 import base64
 from urllib.parse import quote
-from unwatched.shortcode import (ALPHABET, codes_from_text, media_id_to_shortcode,
-                                 shortcode_from_cache_key, url_for)
+from unwatched.shortcode import (
+    ALPHABET,
+    codes_from_text,
+    media_id_to_shortcode,
+    shortcode_from_cache_key,
+    url_for,
+)
+
 
 def test_alphabet_is_instagram_order():
-    assert len(ALPHABET) == 64 and ALPHABET[0] == "A" and ALPHABET[26] == "a" and ALPHABET[52] == "0" and ALPHABET[62:] == "-_"
+    assert (
+        len(ALPHABET) == 64
+        and ALPHABET[0] == "A"
+        and ALPHABET[26] == "a"
+        and ALPHABET[52] == "0"
+        and ALPHABET[62:] == "-_"
+    )
+
 
 def test_media_id_to_shortcode_small_values():
     assert media_id_to_shortcode(0) == "A"
     assert media_id_to_shortcode(63) == "_"
     assert media_id_to_shortcode(64) == "BA"
 
+
 def test_cache_key_decodes_to_shortcode():
     key = quote(base64.b64encode(b"3700000000000000000_123").decode())
     assert shortcode_from_cache_key(key) == media_id_to_shortcode(3700000000000000000)
+
 
 def test_cache_key_garbage_is_none():
     assert shortcode_from_cache_key("not-base64!!") is None
     assert shortcode_from_cache_key(base64.b64encode(b"abc").decode()) is None
 
+
 def test_codes_from_text_variants_and_dedupe():
-    text = ("https://www.instagram.com/p/AAAAAAAAAAA/ x https://instagram.com/reel/BBBBBBBBBBB/?igsh=1 "
-            "https://www.instagram.com/reels/CCCCCCCCCCC https://www.instagram.com/p/AAAAAAAAAAA/")
+    text = (
+        "https://www.instagram.com/p/AAAAAAAAAAA/ x https://instagram.com/reel/BBBBBBBBBBB/?igsh=1 "
+        "https://www.instagram.com/reels/CCCCCCCCCCC https://www.instagram.com/p/AAAAAAAAAAA/"
+    )
     assert codes_from_text(text) == ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"]
+
 
 def test_url_for():
     assert url_for("AAAAAAAAAAA") == "https://www.instagram.com/p/AAAAAAAAAAA/"
@@ -148,6 +167,7 @@ from unwatched.posts import add_source, load_posts, new_since, save_posts
 SRC_A = {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"}
 SRC_B = {"kind": "dm", "name": "kungfookah", "via": "live", "ts": "2025-10-30T11:40:00Z"}
 
+
 def test_add_source_creates_then_merges_and_keeps_earliest_first_seen():
     posts = {}
     assert add_source(posts, "AAAAAAAAAAA", SRC_A) is True
@@ -159,6 +179,7 @@ def test_add_source_creates_then_merges_and_keeps_earliest_first_seen():
     assert rec["first_seen"] == "2025-10-30T11:40:00Z"
     assert rec["local_media"] is None
 
+
 def test_roundtrip_and_missing_file(tmp_path):
     assert load_posts(tmp_path) == {}
     posts = {}
@@ -166,6 +187,7 @@ def test_roundtrip_and_missing_file(tmp_path):
     save_posts(tmp_path, posts)
     assert load_posts(tmp_path) == posts
     assert (tmp_path / "posts.jsonl").read_text(encoding="utf-8").count("\n") == 1
+
 
 def test_new_since():
     posts = {}
@@ -178,9 +200,15 @@ def test_new_since():
 ```python
 from unwatched.state import load_state, save_state
 
+
 def test_state_defaults_and_roundtrip(tmp_path):
     state = load_state(tmp_path)
-    assert state == {"last_run": None, "last_digest": None, "last_error": None, "last_summary": None}
+    assert state == {
+        "last_run": None,
+        "last_digest": None,
+        "last_error": None,
+        "last_summary": None,
+    }
     state["last_run"] = "2026-11-14T15:00:00Z"
     save_state(tmp_path, state)
     assert load_state(tmp_path)["last_run"] == "2026-11-14T15:00:00Z"
@@ -224,13 +252,16 @@ from unwatched.state import load_state
 
 FIX = Path(__file__).parent / "fixtures" / "export"
 
+
 def test_fix_text_repairs_mojibake_and_leaves_plain_text():
     assert fix_text("caf\u00c3\u00a9 tips") == "café tips"
     assert fix_text("plain") == "plain"
 
+
 def test_iso_from_epoch_units():
     assert iso_from_epoch(1761900000, "s") == "2025-10-31T08:40:00Z"
     assert iso_from_epoch(1761910800000, "ms") == "2025-10-31T11:40:00Z"
+
 
 def test_ingest_export_folder_finds_every_source():
     found = ingest_export(FIX)
@@ -243,7 +274,12 @@ def test_ingest_export_folder_finds_every_source():
     assert by_code["DDDDDDDDDDD"] == ["dm"]
     assert by_code["archived-1761921600"] == ["archived"]
     dm = [s for c, s, _ in found if c == "AAAAAAAAAAA" and s["kind"] == "dm"][0]
-    assert dm["name"] == "kungfookah" and dm["text"] == "café tips" and dm["ts"] == "2025-10-31T11:40:00Z"
+    assert (
+        dm["name"] == "kungfookah"
+        and dm["text"] == "café tips"
+        and dm["ts"] == "2025-10-31T11:40:00Z"
+    )
+
 
 def test_ingest_export_zip_with_nested_top_folder(tmp_path):
     zpath = tmp_path / "export.zip"
@@ -252,12 +288,20 @@ def test_ingest_export_zip_with_nested_top_folder(tmp_path):
             if p.is_file():
                 z.write(p, "instagram-me-2026/" + p.relative_to(FIX).as_posix())
     codes = {c for c, _, _ in ingest_export(zpath)}
-    assert codes == {"AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD", "archived-1761921600"}
+    assert codes == {
+        "AAAAAAAAAAA",
+        "BBBBBBBBBBB",
+        "CCCCCCCCCCC",
+        "DDDDDDDDDDD",
+        "archived-1761921600",
+    }
+
 
 def test_ingest_links_file():
     found = ingest_links(Path(__file__).parent / "fixtures" / "links.md")
     assert [c for c, _, _ in found] == ["EEEEEEEEEEE", "AAAAAAAAAAA"]
     assert found[0][1] == {"kind": "links", "name": "links.md", "via": "file", "ts": None}
+
 
 def test_apply_merges_counts_and_archived_media(tmp_path):
     counts = apply(tmp_path, ingest_export(FIX))
@@ -265,6 +309,7 @@ def test_apply_merges_counts_and_archived_media(tmp_path):
     assert len(posts) == 5 and counts["dm:kungfookah"] == 2 and counts["saved:saved"] == 2
     assert posts["archived-1761921600"]["url"] is None
     assert Path(posts["archived-1761921600"]["local_media"]).name == "vid.mp4"
+
 
 def test_apply_seen_marks_meta_and_sets_last_digest(tmp_path):
     apply(tmp_path, ingest_links(Path(__file__).parent / "fixtures" / "links.md"), seen=True)
@@ -296,18 +341,27 @@ def test_apply_seen_marks_meta_and_sets_last_digest(tmp_path):
 from pathlib import Path
 from unwatched.config import DEFAULTS, load_config
 
+
 def test_defaults_when_no_file():
     cfg = load_config(None)
     assert cfg["fetch"] == {"kinds": ["saved", "dm"], "max": 300, "delay": 3}
     assert cfg["digest"] is False and cfg["transcribe"]["model"] == "small"
 
+
 def test_example_config_parses_and_resolves_paths(tmp_path):
     (tmp_path / "unwatched.toml").write_text(
-        'work = "w"\nprofile = "profiles/tech.md"\ndigest = true\n[sources]\ndm = ["https://www.instagram.com/direct/t/1/"]\nsaved = true\n[fetch]\nkinds = ["saved", "dm"]\nmax = 50\n', encoding="utf-8")
+        'work = "w"\nprofile = "profiles/tech.md"\ndigest = true\n[sources]\ndm = ["https://www.instagram.com/direct/t/1/"]\nsaved = true\n[fetch]\nkinds = ["saved", "dm"]\nmax = 50\n',
+        encoding="utf-8",
+    )
     cfg = load_config(tmp_path / "unwatched.toml")
-    assert cfg["work"] == str(tmp_path / "w") and cfg["profile"] == str(tmp_path / "profiles" / "tech.md")
+    assert cfg["work"] == str(tmp_path / "w") and cfg["profile"] == str(
+        tmp_path / "profiles" / "tech.md"
+    )
     assert cfg["digest"] is True and cfg["fetch"]["max"] == 50 and cfg["fetch"]["delay"] == 3
-    assert cfg["sources"]["dm"] == ["https://www.instagram.com/direct/t/1/"] and cfg["sources"]["saved"] is True
+    assert (
+        cfg["sources"]["dm"] == ["https://www.instagram.com/direct/t/1/"]
+        and cfg["sources"]["saved"] is True
+    )
 ```
 
 ```python
@@ -316,12 +370,26 @@ from unwatched.cli import main
 
 FIX = Path(__file__).parent / "fixtures"
 
+
 def test_ingest_then_status(tmp_path, capsys):
-    assert main(["ingest", str(FIX / "export"), "--links", str(FIX / "links.md"), "--work", str(tmp_path)]) == 0
+    assert (
+        main(
+            [
+                "ingest",
+                str(FIX / "export"),
+                "--links",
+                str(FIX / "links.md"),
+                "--work",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
     out = capsys.readouterr().out
     assert "dm:kungfookah: 2" in out and "links:links.md: 2" in out
     assert main(["status", "--work", str(tmp_path)]) == 0
     assert "posts: 6" in capsys.readouterr().out
+
 
 def test_ingest_requires_a_source(tmp_path, capsys):
     assert main(["ingest", "--work", str(tmp_path)]) == 2
@@ -351,21 +419,56 @@ def test_ingest_requires_a_source(tmp_path, capsys):
 ```python
 from unwatched.build import render
 
-POSTS = {"AAAAAAAAAAA": {"code": "AAAAAAAAAAA", "url": "https://www.instagram.com/p/AAAAAAAAAAA/", "first_seen": "2025-10-31T08:40:00Z", "local_media": None,
-                         "sources": [{"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"}, {"kind": "dm", "name": "kungfookah", "via": "live", "ts": None, "text": "café tips"}]},
-         "BBBBBBBBBBB": {"code": "BBBBBBBBBBB", "url": "https://www.instagram.com/p/BBBBBBBBBBB/", "first_seen": "2025-11-01T00:00:00Z", "local_media": None, "sources": []}}
+POSTS = {
+    "AAAAAAAAAAA": {
+        "code": "AAAAAAAAAAA",
+        "url": "https://www.instagram.com/p/AAAAAAAAAAA/",
+        "first_seen": "2025-10-31T08:40:00Z",
+        "local_media": None,
+        "sources": [
+            {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"},
+            {"kind": "dm", "name": "kungfookah", "via": "live", "ts": None, "text": "café tips"},
+        ],
+    },
+    "BBBBBBBBBBB": {
+        "code": "BBBBBBBBBBB",
+        "url": "https://www.instagram.com/p/BBBBBBBBBBB/",
+        "first_seen": "2025-11-01T00:00:00Z",
+        "local_media": None,
+        "sources": [],
+    },
+}
+
 
 def test_render_video_with_transcript_and_image_without():
-    out = render(POSTS, {"AAAAAAAAAAA": {"uploader": "authorA", "caption": "Build this", "media_type": "video"}, "BBBBBBBBBBB": {"media_type": "image"}},
-                 {"AAAAAAAAAAA": "Hello world.", "BBBBBBBBBBB": None}, ["AAAAAAAAAAA", "BBBBBBBBBBB"], "2026-11-14T15:00:00Z")
+    out = render(
+        POSTS,
+        {
+            "AAAAAAAAAAA": {"uploader": "authorA", "caption": "Build this", "media_type": "video"},
+            "BBBBBBBBBBB": {"media_type": "image"},
+        },
+        {"AAAAAAAAAAA": "Hello world.", "BBBBBBBBBBB": None},
+        ["AAAAAAAAAAA", "BBBBBBBBBBB"],
+        "2026-11-14T15:00:00Z",
+    )
     assert out.splitlines()[0] == "# unwatched digest input"
     assert "Generated 2026-11-14T15:00:00Z · 2 posts" in out
-    assert "| 2025-10-31 | authorA | video | https://www.instagram.com/p/AAAAAAAAAAA/ | saved: saved; dm: kungfookah |" in out
-    assert "## AAAAAAAAAAA · @authorA · 2025-10-31" in out and "Caption: Build this" in out and "Transcript:\n\nHello world." in out
+    assert (
+        "| 2025-10-31 | authorA | video | https://www.instagram.com/p/AAAAAAAAAAA/ | saved: saved; dm: kungfookah |"
+        in out
+    )
+    assert (
+        "## AAAAAAAAAAA · @authorA · 2025-10-31" in out
+        and "Caption: Build this" in out
+        and "Transcript:\n\nHello world." in out
+    )
     assert "## BBBBBBBBBBB · @unknown · 2025-11-01" in out and "_image post, no transcript_" in out
 
+
 def test_render_video_without_transcript_yet():
-    out = render(POSTS, {"AAAAAAAAAAA": {"media_type": "video"}}, {"AAAAAAAAAAA": None}, ["AAAAAAAAAAA"], "x")
+    out = render(
+        POSTS, {"AAAAAAAAAAA": {"media_type": "video"}}, {"AAAAAAAAAAA": None}, ["AAAAAAAAAAA"], "x"
+    )
     assert "_video, not transcribed yet_" in out and "Caption: café tips" in out
 ```
 
@@ -401,37 +504,83 @@ from unwatched.posts import add_source
 
 FAKE = [sys.executable, str(Path(__file__).parent / "fake_ytdlp.py")]
 
+
 def _posts():
     p = {}
-    add_source(p, "AAAAAAAAAAA", {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"})
-    add_source(p, "BBBBBBBBBBB", {"kind": "dm", "name": "kungfookah", "via": "live", "ts": "2025-11-01T00:00:00Z"})
-    add_source(p, "CCCCCCCCCCC", {"kind": "liked", "name": "likes", "via": "export", "ts": "2025-11-02T00:00:00Z"})
-    add_source(p, "DDDDDDDDDDD", {"kind": "dm", "name": "other", "via": "live", "ts": "2025-11-03T00:00:00Z"})
+    add_source(
+        p,
+        "AAAAAAAAAAA",
+        {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"},
+    )
+    add_source(
+        p,
+        "BBBBBBBBBBB",
+        {"kind": "dm", "name": "kungfookah", "via": "live", "ts": "2025-11-01T00:00:00Z"},
+    )
+    add_source(
+        p,
+        "CCCCCCCCCCC",
+        {"kind": "liked", "name": "likes", "via": "export", "ts": "2025-11-02T00:00:00Z"},
+    )
+    add_source(
+        p,
+        "DDDDDDDDDDD",
+        {"kind": "dm", "name": "other", "via": "live", "ts": "2025-11-03T00:00:00Z"},
+    )
     return p
+
 
 def test_select_by_kind_thread_since_and_only():
     p = _posts()
-    assert select(p, {"saved", "dm"}, None, None, None) == ["AAAAAAAAAAA", "BBBBBBBBBBB", "DDDDDDDDDDD"]
+    assert select(p, {"saved", "dm"}, None, None, None) == [
+        "AAAAAAAAAAA",
+        "BBBBBBBBBBB",
+        "DDDDDDDDDDD",
+    ]
     assert select(p, {"dm"}, {"kungfookah"}, None, None) == ["BBBBBBBBBBB"]
     assert select(p, {"saved", "dm"}, None, "2025-11-02T00:00:00Z", None) == ["DDDDDDDDDDD"]
     assert select(p, {"saved"}, None, None, {"CCCCCCCCCCC"}) == ["CCCCCCCCCCC"]
 
+
 def test_trim_meta_video_image_and_carousel():
-    assert trim_meta("A", {"uploader": "u", "description": "d", "upload_date": "20251031", "duration": 42.0})["media_type"] == "video"
+    assert (
+        trim_meta(
+            "A", {"uploader": "u", "description": "d", "upload_date": "20251031", "duration": 42.0}
+        )["media_type"]
+        == "video"
+    )
     assert trim_meta("A", {"uploader": "u", "description": "d"})["media_type"] == "image"
-    car = trim_meta("A", {"_type": "playlist", "uploader": "u", "description": "d", "entries": [{"duration": None}, {"duration": 12.5}]})
+    car = trim_meta(
+        "A",
+        {
+            "_type": "playlist",
+            "uploader": "u",
+            "description": "d",
+            "entries": [{"duration": None}, {"duration": 12.5}],
+        },
+    )
     assert car["media_type"] == "video" and car["duration"] == 12.5
     assert trim_meta("A", {"_type": "playlist", "entries": [{}, {}]})["media_type"] == "image"
 
+
 def test_fetch_one_video_downloads_audio(tmp_path, monkeypatch):
-    monkeypatch.setenv("FAKE_YTDLP_JSON", json.dumps({"uploader": "u", "description": "d", "duration": 10}))
-    meta = fetch_one("AAAAAAAAAAA", "https://www.instagram.com/p/AAAAAAAAAAA/", tmp_path, None, ytdlp=FAKE)
+    monkeypatch.setenv(
+        "FAKE_YTDLP_JSON", json.dumps({"uploader": "u", "description": "d", "duration": 10})
+    )
+    meta = fetch_one(
+        "AAAAAAAAAAA", "https://www.instagram.com/p/AAAAAAAAAAA/", tmp_path, None, ytdlp=FAKE
+    )
     assert meta["media_type"] == "video" and meta["error"] is None
-    assert (tmp_path / "audio" / "AAAAAAAAAAA.m4a").exists() and (tmp_path / "meta" / "AAAAAAAAAAA.json").exists()
+    assert (tmp_path / "audio" / "AAAAAAAAAAA.m4a").exists() and (
+        tmp_path / "meta" / "AAAAAAAAAAA.json"
+    ).exists()
+
 
 def test_fetch_one_failure_is_recorded_not_raised(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
-    meta = fetch_one("BBBBBBBBBBB", "https://www.instagram.com/p/BBBBBBBBBBB/", tmp_path, None, ytdlp=FAKE)
+    meta = fetch_one(
+        "BBBBBBBBBBB", "https://www.instagram.com/p/BBBBBBBBBBB/", tmp_path, None, ytdlp=FAKE
+    )
     assert "login required" in meta["error"]
 ```
 
@@ -457,20 +606,32 @@ def test_fetch_one_failure_is_recorded_not_raised(tmp_path, monkeypatch):
 from unwatched.transcribe import audio_path, todo
 from unwatched.posts import add_source
 
+
 def test_todo_skips_done_and_forces_only(tmp_path):
     posts = {}
     add_source(posts, "AAAAAAAAAAA", {"kind": "dm", "name": "t", "via": "live", "ts": None})
     add_source(posts, "BBBBBBBBBBB", {"kind": "dm", "name": "t", "via": "live", "ts": None})
     add_source(posts, "CCCCCCCCCCC", {"kind": "dm", "name": "t", "via": "live", "ts": None})
-    (tmp_path / "audio").mkdir(); (tmp_path / "transcripts").mkdir()
-    (tmp_path / "audio" / "AAAAAAAAAAA.m4a").touch(); (tmp_path / "audio" / "BBBBBBBBBBB.m4a").touch()
+    (tmp_path / "audio").mkdir()
+    (tmp_path / "transcripts").mkdir()
+    (tmp_path / "audio" / "AAAAAAAAAAA.m4a").touch()
+    (tmp_path / "audio" / "BBBBBBBBBBB.m4a").touch()
     (tmp_path / "transcripts" / "BBBBBBBBBBB.txt").write_text("done")
     assert todo(tmp_path, posts, None) == ["AAAAAAAAAAA"]
     assert todo(tmp_path, posts, {"BBBBBBBBBBB", "CCCCCCCCCCC"}) == ["BBBBBBBBBBB"]
     assert audio_path(tmp_path, "CCCCCCCCCCC", posts) is None
 
+
 def test_audio_path_prefers_local_media_for_archived(tmp_path):
-    posts = {"archived-1": {"code": "archived-1", "url": None, "sources": [], "first_seen": "x", "local_media": str(tmp_path / "v.mp4")}}
+    posts = {
+        "archived-1": {
+            "code": "archived-1",
+            "url": None,
+            "sources": [],
+            "first_seen": "x",
+            "local_media": str(tmp_path / "v.mp4"),
+        }
+    }
     (tmp_path / "v.mp4").touch()
     assert audio_path(tmp_path, "archived-1", posts) == tmp_path / "v.mp4"
 ```
@@ -507,21 +668,37 @@ from unwatched.shortcode import media_id_to_shortcode
 FIX = Path(__file__).parent / "fixtures"
 ALL = [media_id_to_shortcode(3700000000000000000 + i) for i in range(59, -1, -1)]
 
+
 def test_codes_from_srcs_is_pure():
     import base64
-    src = "https://cdn/x.jpg?stp=1&ig_cache_key=" + base64.b64encode(b"3700000000000000000_1").decode() + "&_nc=1"
+
+    src = (
+        "https://cdn/x.jpg?stp=1&ig_cache_key="
+        + base64.b64encode(b"3700000000000000000_1").decode()
+        + "&_nc=1"
+    )
     assert codes_from_srcs([src, src]) == [media_id_to_shortcode(3700000000000000000)]
+
 
 @pytest.mark.browser
 def test_sweep_dm_full_collects_everything(tmp_path):
-    found = sweep_dm((FIX / "dm_thread.html").resolve().as_uri(), set(), profile_dir=tmp_path, full=True, headless=True)
+    found = sweep_dm(
+        (FIX / "dm_thread.html").resolve().as_uri(),
+        set(),
+        profile_dir=tmp_path,
+        full=True,
+        headless=True,
+    )
     assert [c for c, _, _ in found] == ALL
     assert found[0][1]["kind"] == "dm" and found[0][1]["via"] == "live"
+
 
 @pytest.mark.browser
 def test_sweep_dm_stops_after_known_streak(tmp_path):
     known = set(ALL[5:])
-    found = sweep_dm((FIX / "dm_thread.html").resolve().as_uri(), known, profile_dir=tmp_path, headless=True)
+    found = sweep_dm(
+        (FIX / "dm_thread.html").resolve().as_uri(), known, profile_dir=tmp_path, headless=True
+    )
     codes = [c for c, _, _ in found]
     assert codes[:5] == ALL[:5] and len(codes) < 40
 ```
@@ -558,13 +735,21 @@ from unwatched.state import load_state
 FAKE = [sys.executable, str(Path(__file__).parent / "fake_claude.py")]
 FIX = Path(__file__).parent / "fixtures" / "export"
 
+
 def test_parse_marker():
     assert parse_marker("blah\nUNWATCHED_DIGEST_DONE kept=3 total=10\n") == (3, 10)
     assert parse_marker("no marker") is None
 
+
 def test_build_prompt_contains_paths_and_mode(tmp_path):
     p = build_prompt("SKILL", tmp_path / "tech.md", tmp_path / "master.md", tmp_path / "in.md")
-    assert p.startswith("SKILL") and "Mode: headless." in p and f"Master: {tmp_path / 'master.md'}" in p and "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in p
+    assert (
+        p.startswith("SKILL")
+        and "Mode: headless." in p
+        and f"Master: {tmp_path / 'master.md'}" in p
+        and "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in p
+    )
+
 
 def test_run_digest_success_updates_state(tmp_path, monkeypatch):
     work, master = tmp_path / "work", tmp_path / "master.md"
@@ -574,10 +759,12 @@ def test_run_digest_success_updates_state(tmp_path, monkeypatch):
     assert ok and "kept=2" in summary and master.read_text() == "digested\n"
     assert load_state(work)["last_digest"] is not None
 
+
 def test_run_digest_fails_without_marker_or_change(tmp_path, monkeypatch):
     work, master = tmp_path / "work", tmp_path / "master.md"
     apply(work, ingest_export(FIX))
-    monkeypatch.setenv("FAKE_MASTER", str(master)); monkeypatch.setenv("FAKE_CLAUDE_SILENT", "1")
+    monkeypatch.setenv("FAKE_MASTER", str(master))
+    monkeypatch.setenv("FAKE_CLAUDE_SILENT", "1")
     ok, summary = run_digest(work, tmp_path / "tech.md", master, claude=FAKE)
     assert not ok and load_state(work)["last_digest"] is None
 ```
@@ -601,8 +788,13 @@ def test_run_digest_fails_without_marker_or_change(tmp_path, monkeypatch):
 ```python
 from unwatched.schedule import TASK_NAME, build_register_script
 
+
 def test_register_script_has_required_settings_and_quotes_spaces():
-    s = build_register_script(r"C:\Program Files\unwatched\unwatched.exe", r"C:\Users\me\My Config\unwatched.toml", "15:00")
+    s = build_register_script(
+        r"C:\Program Files\unwatched\unwatched.exe",
+        r"C:\Users\me\My Config\unwatched.toml",
+        "15:00",
+    )
     assert TASK_NAME == "unwatched daily" and f"-TaskName '{TASK_NAME}'" in s
     assert "-Daily -At 15:00" in s and "-StartWhenAvailable" in s and "-WakeToRun" in s
     assert "-LogonType Interactive" in s and "-Priority 7" in s and "-Hours 2" in s
@@ -635,14 +827,33 @@ from unwatched.state import load_state
 
 FIX = Path(__file__).parent / "fixtures"
 
+
 def test_run_all_with_file_sources_only(tmp_path):
-    cfg = {"work": str(tmp_path / "w"), "profile": None, "master": None, "digest": False, "username": None,
-           "sources": {"dm": [], "saved": False, "links": [str(FIX / "links.md")], "export": [str(FIX / "export")]},
-           "fetch": {"kinds": [], "max": 300, "delay": 0}, "transcribe": {"model": "small", "language": "en"}}
+    cfg = {
+        "work": str(tmp_path / "w"),
+        "profile": None,
+        "master": None,
+        "digest": False,
+        "username": None,
+        "sources": {
+            "dm": [],
+            "saved": False,
+            "links": [str(FIX / "links.md")],
+            "export": [str(FIX / "export")],
+        },
+        "fetch": {"kinds": [], "max": 300, "delay": 0},
+        "transcribe": {"model": "small", "language": "en"},
+    }
     assert run_all(cfg, ytdlp=[sys.executable, str(Path(__file__).parent / "fake_ytdlp.py")]) == 0
     st = load_state(tmp_path / "w")
-    assert st["last_run"] and st["last_error"] is None and st["last_summary"].startswith("ingested 6 new, fetched 0")
-    assert (tmp_path / "w" / "digest-input.md").exists() and list((tmp_path / "w" / "logs").glob("*.log"))
+    assert (
+        st["last_run"]
+        and st["last_error"] is None
+        and st["last_summary"].startswith("ingested 6 new, fetched 0")
+    )
+    assert (tmp_path / "w" / "digest-input.md").exists() and list(
+        (tmp_path / "w" / "logs").glob("*.log")
+    )
 ```
 
 - [ ] **Step 2: Run to verify failure.** — [ ] **Step 3: Implement `run.py` and the subcommand.** — [ ] **Step 4: Run to verify pass.** — [ ] **Step 5: Commit** — `feat: run the whole daily chain with logs and a summary`
@@ -665,13 +876,18 @@ def test_run_all_with_file_sources_only(tmp_path):
 ```python
 import json
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
+
 
 def test_plugin_manifest_and_skill_frontmatter():
     m = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     assert m["name"] == "unwatched" and m["version"] == "0.1.0"
     skill = (ROOT / "skills" / "unwatched" / "SKILL.md").read_text(encoding="utf-8")
-    assert skill.startswith("---\nname: unwatched\n") and "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in skill
+    assert (
+        skill.startswith("---\nname: unwatched\n")
+        and "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in skill
+    )
     for p in ("tech", "design", "cooking", "fashion"):
         text = (ROOT / "profiles" / f"{p}.md").read_text(encoding="utf-8")
         assert all(k in text for k in ("Keep:", "Skip:", "Extract per post:", "Output:"))
