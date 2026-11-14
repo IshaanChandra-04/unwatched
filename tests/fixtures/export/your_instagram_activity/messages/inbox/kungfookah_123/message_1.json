@@ -1,0 +1,25 @@
+{
+  "participants": [{"name": "kungfookah"}, {"name": "me"}],
+  "title": "kungfookah",
+  "messages": [
+    {
+      "sender_name": "me",
+      "timestamp_ms": 1761910800000,
+      "share": {
+        "link": "https://www.instagram.com/reel/AAAAAAAAAAA/",
+        "share_text": "cafÃ© tips",
+        "original_content_owner": "authorA"
+      }
+    },
+    {
+      "sender_name": "me",
+      "timestamp_ms": 1761914400000,
+      "content": "look https://www.instagram.com/p/DDDDDDDDDDD/?igsh=abc"
+    },
+    {
+      "sender_name": "me",
+      "timestamp_ms": 1761918000000,
+      "share": {"share_text": "no link here"}
+    }
+  ]
+}

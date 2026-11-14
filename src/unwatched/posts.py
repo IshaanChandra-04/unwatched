@@ -40,9 +40,13 @@ def add_source(
     ts = source.get("ts")
     rec = posts.get(code)
     if rec is None:
+        # shortcut: archived posts have no shortcode and so no URL; revisit if another
+        # linkless kind appears
+        if url is None and not code.startswith("archived-"):
+            url = url_for(code)
         posts[code] = {
             "code": code,
-            "url": url_for(code) if url is None and not code.startswith("archived-") else url,
+            "url": url,
             "sources": [source],
             "first_seen": ts or now_iso(),
             "local_media": local_media,
