@@ -12,6 +12,11 @@ dependencies = [
     "av<14",
 ]
 
+[project.urls]
+Homepage = "https://github.com/IshaanChandra-04/unwatched"
+Repository = "https://github.com/IshaanChandra-04/unwatched"
+Changelog = "https://github.com/IshaanChandra-04/unwatched/blob/main/CHANGELOG.md"
+
 [project.scripts]
 unwatched = "unwatched.cli:main"
 

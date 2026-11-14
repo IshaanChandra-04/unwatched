@@ -14,7 +14,7 @@ if you opened the posts yourself.
 You need Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv tool install --with-executables-from playwright git+https://github.com/<handle>/unwatched
+uv tool install --with-executables-from playwright git+https://github.com/IshaanChandra-04/unwatched
 playwright install chromium
 unwatched login
 ```
@@ -96,7 +96,7 @@ The skill that does the judgement is also a Claude Code plugin, so you can run t
 from a Claude Code session:
 
 ```bash
-claude plugin marketplace add <handle>/unwatched
+claude plugin marketplace add IshaanChandra-04/unwatched
 claude plugin install unwatched
 ```
 

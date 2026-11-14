@@ -28,7 +28,7 @@ recorded as failed.
 ## Steps
 
 1. **Check the tool.** Run `unwatched status`. If the command is missing, say how to install it:
-   `uv tool install git+https://github.com/<handle>/unwatched`, then `unwatched login`.
+   `uv tool install git+https://github.com/IshaanChandra-04/unwatched`, then `unwatched login`.
    If status shows `action needed: sign-in expired`, ask the person to run `unwatched login`
    and stop until they have.
 2. **Find the profile and the master document.** The profile is a short markdown file saying

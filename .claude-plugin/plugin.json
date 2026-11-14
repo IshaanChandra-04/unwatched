@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "description": "Turn the reels you saved or sent yourself into a document you will actually read.",
   "author": {
-    "name": "<owner>",
-    "url": "https://github.com/<handle>"
+    "name": "IshaanChandra-04",
+    "url": "https://github.com/IshaanChandra-04"
   },
-  "homepage": "https://github.com/<handle>/unwatched",
-  "repository": "https://github.com/<handle>/unwatched",
+  "homepage": "https://github.com/IshaanChandra-04/unwatched",
+  "repository": "https://github.com/IshaanChandra-04/unwatched",
   "license": "MIT",
   "keywords": ["instagram", "reels", "transcription", "knowledge-base"]
 }
