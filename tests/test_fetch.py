@@ -75,7 +75,7 @@ def test_pending_retries_failed_posts_and_skips_done(tmp_path):
 def test_fetch_one_treats_no_video_formats_as_an_image_post(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
     monkeypatch.setenv(
-        "FAKE_YTDLP_STDERR", "ERROR: [Instagram] DZdk2glJuow: No video formats found!; please report"
+        "FAKE_YTDLP_STDERR", "ERROR: [Instagram] DZdk2glJuow: No video formats found!; please"
     )
     meta = fetch_one(
         "DZdoibdDSu2", "https://www.instagram.com/p/DZdoibdDSu2/", tmp_path, None, ytdlp=FAKE
