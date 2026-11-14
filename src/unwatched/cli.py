@@ -6,6 +6,7 @@ from pathlib import Path
 
 from unwatched import __version__
 from unwatched.build import run_build
+from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
 from unwatched.state import load_state
@@ -45,6 +46,15 @@ def _parser() -> argparse.ArgumentParser:
     ingest.add_argument(
         "--seen", action="store_true", help="record these posts as already processed"
     )
+    fetch = subs["fetch"]
+    fetch.add_argument("--kinds", default="saved,dm", help="comma-separated; default saved,dm")
+    fetch.add_argument("--thread", action="append", default=[], help="limit DM posts to a thread")
+    fetch.add_argument("--since", help="only posts first seen after this ISO timestamp")
+    fetch.add_argument("--max", type=int, default=300, help="stop before fetching more than this")
+    fetch.add_argument("--delay", type=float, default=3, help="seconds between posts")
+    fetch.add_argument("--only", nargs="*", metavar="CODE", help="fetch exactly these codes")
+    fetch.add_argument("--cookies", type=Path, help=f"cookies.txt; default {COOKIES_PATH}")
+    fetch.add_argument("--ytdlp", default="yt-dlp", help="yt-dlp executable")
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -84,7 +94,27 @@ def cmd_build(args) -> int:
     return 0
 
 
-_COMMANDS = {"status": cmd_status, "ingest": cmd_ingest, "build": cmd_build}
+def cmd_fetch(args) -> int:
+    posts = load_posts(args.work)
+    only = set(args.only) if args.only else None
+    threads = set(args.thread) or None
+    todo = pending(args.work, select(posts, set(args.kinds.split(",")), threads, args.since, only))
+    if len(todo) > args.max:
+        print(f"selected {len(todo)} posts, cap is {args.max}; ", end="")
+        print(f"rerun with --max {len(todo)} to continue")
+        return EXIT_CAP
+    cookies = args.cookies or (COOKIES_PATH if COOKIES_PATH.exists() else None)
+    counts = run_fetch(args.work, todo, cookies, args.delay, args.ytdlp)
+    print(f"fetched {counts['fetched']} failed {counts['failed']}")
+    return 0
+
+
+_COMMANDS = {
+    "status": cmd_status,
+    "ingest": cmd_ingest,
+    "build": cmd_build,
+    "fetch": cmd_fetch,
+}
 
 
 def main(argv: list[str] | None = None) -> int:
