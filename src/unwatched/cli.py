@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from unwatched import __version__
+from unwatched import __version__, schedule
 from unwatched.build import run_build
 from unwatched.digest import run_digest
 from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
@@ -71,6 +71,10 @@ def _parser() -> argparse.ArgumentParser:
     digest.add_argument("--master", type=Path, required=True, help="master document to update")
     digest.add_argument("--claude", default="claude", help="Claude Code executable")
     digest.add_argument("--max-turns", type=int, default=40)
+    schedule = subs["schedule"]
+    schedule.add_argument("action", choices=["install", "remove", "status"])
+    schedule.add_argument("--at", default="15:00", help="daily time, HH:MM (default 15:00)")
+    schedule.add_argument("--config", type=Path, help="config file the task runs with")
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -163,6 +167,26 @@ def cmd_digest(args) -> int:
     return 0 if ok else EXIT_DIGEST
 
 
+def cmd_schedule(args) -> int:
+    try:
+        if args.action == "install":
+            if not args.config:
+                print("schedule install needs --config", file=sys.stderr)
+                return 2
+            schedule.install(args.at, args.config)
+            print(f"registered '{schedule.TASK_NAME}' daily at {args.at}")
+        elif args.action == "remove":
+            schedule.remove()
+            print(f"removed '{schedule.TASK_NAME}'")
+        else:
+            for key, value in schedule.status().items():
+                print(f"{key}: {value}")
+    except (NotImplementedError, RuntimeError) as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    return 0
+
+
 _COMMANDS = {
     "status": cmd_status,
     "ingest": cmd_ingest,
@@ -171,6 +195,7 @@ _COMMANDS = {
     "transcribe": cmd_transcribe,
     "login": cmd_login,
     "digest": cmd_digest,
+    "schedule": cmd_schedule,
 }
 
 
