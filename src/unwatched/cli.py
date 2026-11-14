@@ -15,6 +15,7 @@ from unwatched.transcribe import run_transcribe
 EXIT_LOGIN = 3
 EXIT_CAP = 4
 EXIT_DIGEST = 5
+LOGIN_MESSAGE = "sign-in expired, run: unwatched login"
 
 _HELP = {
     "status": "show the last run and anything that needs you",
@@ -47,6 +48,10 @@ def _parser() -> argparse.ArgumentParser:
     ingest.add_argument(
         "--seen", action="store_true", help="record these posts as already processed"
     )
+    ingest.add_argument("--dm", action="append", default=[], metavar="URL", help="DM thread")
+    ingest.add_argument("--saved", action="store_true", help="sweep the saved page")
+    ingest.add_argument("--full", action="store_true", help="do not stop at known posts")
+    ingest.add_argument("--username", help="Instagram username for the saved page")
     fetch = subs["fetch"]
     fetch.add_argument("--kinds", default="saved,dm", help="comma-separated; default saved,dm")
     fetch.add_argument("--thread", action="append", default=[], help="limit DM posts to a thread")
@@ -77,14 +82,26 @@ def cmd_status(args) -> int:
 
 
 def cmd_ingest(args) -> int:
-    if not args.exports and not args.links:
-        print("ingest needs an export or --links", file=sys.stderr)
+    if not (args.exports or args.links or args.dm or args.saved):
+        print("ingest needs an export, --links, --dm or --saved", file=sys.stderr)
         return 2
     found = []
     for export in args.exports:
         found += ingest_export(export)
     for links in args.links:
         found += ingest_links(links)
+    if args.dm or args.saved:
+        from unwatched.browser import LoginRequired, sweep_dm, sweep_saved
+
+        known = set(load_posts(args.work))
+        try:
+            for url in args.dm:
+                found += sweep_dm(url, known, full=args.full)
+            if args.saved:
+                found += sweep_saved(known, full=args.full, username=args.username)
+        except LoginRequired:
+            print(LOGIN_MESSAGE, file=sys.stderr)
+            return EXIT_LOGIN
     counts = apply(args.work, found, seen=args.seen)
     for label in sorted(counts):
         print(f"{label}: {counts[label]}")
@@ -122,12 +139,25 @@ def cmd_transcribe(args) -> int:
     return 0
 
 
+def cmd_login(args) -> int:
+    from unwatched.browser import export_cookies, login
+
+    print("A browser window is opening. Sign in to Instagram there; nothing is typed for you.")
+    if not login():
+        print("no sign-in detected within 10 minutes", file=sys.stderr)
+        return 1
+    export_cookies()
+    print("signed in")
+    return 0
+
+
 _COMMANDS = {
     "status": cmd_status,
     "ingest": cmd_ingest,
     "build": cmd_build,
     "fetch": cmd_fetch,
     "transcribe": cmd_transcribe,
+    "login": cmd_login,
 }
 
 
