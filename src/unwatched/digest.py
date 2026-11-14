@@ -1,9 +1,10 @@
 """Hand the new posts to headless Claude Code and check that it updated the master document.
 
 Claude runs inside a fresh temporary folder that holds copies of the digest input, the profile
-and the master document, with no other directory added, so text written by strangers (captions,
-transcripts) can at most damage those copies. The edited copy is copied back only when the run
-printed the completion marker and changed the file; the previous version is kept as ``.bak``.
+and the master document, with no other directory and none of the user's MCP servers, so text
+written by strangers (captions, transcripts) can at most damage those copies. The edited copy
+is copied back only when the run printed the completion marker and changed the file; the
+previous version is kept as ``.bak``.
 """
 
 import logging
@@ -77,6 +78,7 @@ def run_digest(
         cmd = _command(claude) + [
             "-p",
             "--restricted",
+            "--strict-mcp-config",
             "--allowedTools",
             "Read,Edit,Write,Glob,Grep",
             "--max-turns",

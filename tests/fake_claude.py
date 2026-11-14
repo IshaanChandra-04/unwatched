@@ -4,6 +4,7 @@ Reads the prompt from stdin, appends a line to the file named on its ``Master:``
 the completion marker. With ``FAKE_CLAUDE_SILENT=1`` it does nothing and prints nothing.
 """
 
+import json
 import os
 import re
 import sys
@@ -11,6 +12,8 @@ from pathlib import Path
 
 
 def main() -> int:
+    if os.environ.get("FAKE_CLAUDE_ARGV"):
+        Path(os.environ["FAKE_CLAUDE_ARGV"]).write_text(json.dumps(sys.argv[1:]), encoding="utf-8")
     if os.environ.get("FAKE_CLAUDE_SILENT") == "1":
         return 0
     prompt = sys.stdin.read()
