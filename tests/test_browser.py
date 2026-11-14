@@ -41,6 +41,7 @@ def test_sweep_dm_waits_for_content_that_loads_late(tmp_path):
     url = (FIX / "dm_thread_delayed.html").resolve().as_uri()
     found = sweep_dm(url, set(), profile_dir=tmp_path, full=True, headless=True, wait_ms=50)
     assert [c for c, _, _ in found] == ALL
+    assert found[0][1]["name"] == "kungfookah"  # read after the list exists, not from the sidebar
 
 
 @pytest.mark.browser

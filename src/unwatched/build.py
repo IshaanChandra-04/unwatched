@@ -60,6 +60,8 @@ def render(
         transcript = transcripts.get(code)
         if transcript:
             lines += ["Transcript:", "", transcript]
+        elif transcript == "" and meta.get("media_type") == "video":
+            lines.append("_video, no speech detected_")
         elif meta.get("media_type") == "video":
             lines.append("_video, not transcribed yet_")
         else:

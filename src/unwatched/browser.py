@@ -45,17 +45,14 @@ _GRID_JS = """
 }
 """
 _SCROLL_DOWN_JS = "(step) => window.scrollBy(0, step)"
-# The conversation header is the first heading in the nearest ancestor of the message list
-# that has one; the inbox sidebar's headings live in a sibling column and are never reached.
+# The conversation header is the last heading that precedes the message list in document order;
+# the inbox sidebar's headings come earlier.
 _THREAD_HEADER_JS = f"""
 () => {{
-  let el = ({_SCROLLER_JS})();
-  while (el && el !== document.body) {{
-    const h = el.querySelector('h1, h2');
-    if (h) return h.textContent;
-    el = el.parentElement;
-  }}
-  return null;
+  const sc = ({_SCROLLER_JS})();
+  const before = [...document.querySelectorAll('h1, h2')]
+    .filter(h => h.compareDocumentPosition(sc) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return before.length ? before[before.length - 1].textContent : null;
 }}
 """
 _PROFILE_LINK_JS = """
@@ -234,7 +231,7 @@ def sweep_dm(
         page = ctx.new_page()
         page.goto(url)
         _check_login(page)
-        page.wait_for_timeout(wait_ms)
+        _wait_for_content(page, _COLLECT_JS)
         # the tab title is "Instagram • Messages"; the thread's name is the conversation header
         header = page.evaluate(_THREAD_HEADER_JS) or ""
         name = header.strip() or re.sub(r"\W+", "", urlparse(url).path.rsplit("/", 2)[-2])

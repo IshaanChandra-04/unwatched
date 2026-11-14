@@ -45,6 +45,14 @@ def test_render_video_with_transcript_and_image_without():
     assert "_image post, no transcript_" in out
 
 
+def test_render_silent_video_says_no_speech():
+    out = render(
+        POSTS, {"AAAAAAAAAAA": {"media_type": "video"}}, {"AAAAAAAAAAA": ""}, ["AAAAAAAAAAA"], "x"
+    )
+    assert "_video, no speech detected_" in out
+    assert "not transcribed yet" not in out
+
+
 def test_render_video_without_transcript_yet():
     out = render(
         POSTS, {"AAAAAAAAAAA": {"media_type": "video"}}, {"AAAAAAAAAAA": None}, ["AAAAAAAAAAA"], "x"
