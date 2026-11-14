@@ -6,6 +6,7 @@ from pathlib import Path
 
 from unwatched import __version__
 from unwatched.build import run_build
+from unwatched.digest import run_digest
 from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
@@ -65,6 +66,11 @@ def _parser() -> argparse.ArgumentParser:
     transcribe.add_argument("--model", default="small", help="small (default) or large-v3-turbo")
     transcribe.add_argument("--language", default="en", help="language code, or auto")
     transcribe.add_argument("--only", nargs="*", metavar="CODE", help="re-run exactly these codes")
+    digest = subs["digest"]
+    digest.add_argument("--profile", type=Path, required=True, help="interest profile")
+    digest.add_argument("--master", type=Path, required=True, help="master document to update")
+    digest.add_argument("--claude", default="claude", help="Claude Code executable")
+    digest.add_argument("--max-turns", type=int, default=40)
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -151,6 +157,12 @@ def cmd_login(args) -> int:
     return 0
 
 
+def cmd_digest(args) -> int:
+    ok, summary = run_digest(args.work, args.profile, args.master, args.claude, args.max_turns)
+    print(summary)
+    return 0 if ok else EXIT_DIGEST
+
+
 _COMMANDS = {
     "status": cmd_status,
     "ingest": cmd_ingest,
@@ -158,6 +170,7 @@ _COMMANDS = {
     "fetch": cmd_fetch,
     "transcribe": cmd_transcribe,
     "login": cmd_login,
+    "digest": cmd_digest,
 }
 
 
