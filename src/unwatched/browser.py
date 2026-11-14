@@ -154,8 +154,13 @@ def export_cookies(profile_dir: Path = PROFILE_DIR, out: Path = COOKIES_PATH) ->
     return out
 
 
+def _is_blocked(url: str) -> bool:
+    """A sign-in page or an Instagram checkpoint: nothing can be read until the user acts."""
+    return "/accounts/login" in url or "/challenge" in url
+
+
 def _check_login(page) -> None:
-    if "/accounts/login" in page.url:
+    if _is_blocked(page.url):
         raise LoginRequired
 
 
@@ -167,6 +172,7 @@ def _wait_for_content(page, collect_js: str, timeout_ms: int = 15000) -> None:
         if state.get("srcs") or state.get("hrefs"):
             return
         page.wait_for_timeout(250)
+    log.warning("no posts appeared on %s within %d s; layout change?", page.url, timeout_ms // 1000)
 
 
 def _sweep(
@@ -194,13 +200,15 @@ def _sweep(
         codes += codes_from_text(" ".join(state["hrefs"]))
         new_this_round = 0
         for code in codes:
-            if code in seen or code in known:
+            if code in seen:
+                continue  # still on screen from an earlier round; says nothing about the past
+            if code in known:
                 streak += 1
             else:
                 streak = 0
-                seen.add(code)
                 collected.append(code)
                 new_this_round += 1
+            seen.add(code)
             if not full and streak >= stop_after_known:
                 return collected
         if state["end"] and new_this_round == 0:

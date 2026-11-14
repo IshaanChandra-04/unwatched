@@ -1,6 +1,7 @@
 """Collect posts from a data export, a links file, or live sweeps into the store."""
 
 import json
+import logging
 import re
 import zipfile
 from collections.abc import Iterator
@@ -12,6 +13,7 @@ from unwatched.shortcode import codes_from_text
 from unwatched.state import load_state, save_state
 
 Found = tuple[str, dict, str | None]  # (code, source, local_media)
+log = logging.getLogger("unwatched")
 _MESSAGE_FILE = re.compile(r"messages/inbox/[^/]+/message_\d+\.json$")
 
 
@@ -125,14 +127,20 @@ def ingest_links(path: Path) -> list[Found]:
     return [(code, src, None) for code in codes_from_text(path.read_text(encoding="utf-8"))]
 
 
-def _materialize(work: Path, code: str, local_media: str) -> str:
+def _materialize(work: Path, code: str, local_media: str) -> str | None:
+    """Extract an archived post's media from its export zip; None when the zip lacks it."""
     zip_path, sep, member = local_media.partition("!")
     if not sep or not Path(zip_path).is_file():
         return local_media
-    out = work / "archived" / f"{code}{Path(member).suffix}"
-    out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as z:
-        out.write_bytes(z.read(member))
+        # the export's uri is relative to the export root, which may sit inside a top folder
+        name = next((n for n in z.namelist() if n.endswith(member)), None)
+        if name is None:
+            log.warning("%s: media %s is not in %s (another export part?)", code, member, zip_path)
+            return None
+        out = work / "archived" / f"{code}{Path(member).suffix}"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(z.read(name))
     return str(out)
 
 

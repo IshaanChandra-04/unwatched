@@ -14,10 +14,13 @@ if you opened the posts yourself.
 You need Python 3.11 or newer and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv tool install git+https://github.com/<handle>/unwatched
-uvx --from git+https://github.com/<handle>/unwatched playwright install chromium
+uv tool install --with-executables-from playwright git+https://github.com/<handle>/unwatched
+playwright install chromium
 unwatched login
 ```
+
+The first line installs `unwatched` and, next to it, the `playwright` command from the same
+environment; the second downloads the browser it drives (about 200 MB).
 
 `unwatched login` opens a browser window that belongs to the tool. Sign in to Instagram there
 yourself (the tool types nothing and never sees your password). The session is kept in
@@ -70,6 +73,12 @@ What can hold it up:
   downloading and tells you the number. Rerun `unwatched fetch --max <n>` to continue.
 - **Cost.** With `digest = true` the last step runs Claude Code headlessly, which spends one run a
   day from your Claude plan. Set `digest = false` to keep collection and transcription only.
+- **A digest that runs out of turns.** Claude gets `digest_max_turns` tool turns (default 60) to
+  update the master document. If it fails, the run exits 5, `status` shows the reason, and the
+  next run offers the same posts again, so raise the limit in your config or run
+  `unwatched digest` by hand with `--max-turns`.
+- **Every fetch failed.** Usually the Instagram session or cookies went stale. `status` says so;
+  run `unwatched login` once.
 
 On macOS or Linux the scheduler command is not implemented yet; a cron line does the same job:
 `0 15 * * * unwatched run --config /path/to/unwatched.toml`.
@@ -105,6 +114,11 @@ days. Then:
 ```bash
 unwatched ingest path/to/instagram-export.zip --work <work>
 ```
+
+Meta does not document the export's layout, and this parser was written against the file names
+and fields seen in earlier exports (`saved_posts.json`, `liked_posts.json`,
+`messages/inbox/*/message_*.json`, `archived_posts.json`). If ingest reports no posts from an
+export, open an issue with the list of file names in your zip (no contents needed).
 
 ## Privacy
 

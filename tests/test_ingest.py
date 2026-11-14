@@ -42,14 +42,28 @@ def test_ingest_export_zip_with_nested_top_folder(tmp_path):
         for p in FIX.rglob("*"):
             if p.is_file():
                 z.write(p, "instagram-me-2026/" + p.relative_to(FIX).as_posix())
-    codes = {c for c, _, _ in ingest_export(zpath)}
-    assert codes == {
+    found = ingest_export(zpath)
+    assert {c for c, _, _ in found} == {
         "AAAAAAAAAAA",
         "BBBBBBBBBBB",
         "CCCCCCCCCCC",
         "DDDDDDDDDDD",
         "archived-1761921600",
     }
+    apply(tmp_path / "w", found)
+    media = load_posts(tmp_path / "w")["archived-1761921600"]["local_media"]
+    assert media and Path(media).exists() and Path(media).name == "archived-1761921600.mp4"
+
+
+def test_apply_survives_archived_media_missing_from_the_zip(tmp_path):
+    zpath = tmp_path / "part2.zip"
+    with zipfile.ZipFile(zpath, "w") as z:
+        z.write(
+            FIX / "your_instagram_activity" / "content" / "archived_posts.json",
+            "x/your_instagram_activity/content/archived_posts.json",
+        )
+    apply(tmp_path / "w", ingest_export(zpath))
+    assert load_posts(tmp_path / "w")["archived-1761921600"]["local_media"] is None
 
 
 def test_ingest_links_file():

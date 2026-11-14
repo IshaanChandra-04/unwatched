@@ -3,12 +3,15 @@
 import json
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from unwatched.posts import load_posts
 
 COOKIES_PATH = Path.home() / ".unwatched" / "cookies.txt"
+# the module in this interpreter, not a PATH lookup: `uv tool install` exposes no yt-dlp binary
+DEFAULT_YTDLP = [sys.executable, "-m", "yt_dlp"]
 log = logging.getLogger("unwatched")
 
 
@@ -69,7 +72,11 @@ def _run(ytdlp: str | list[str], *args: str) -> subprocess.CompletedProcess:
 
 
 def fetch_one(
-    code: str, url: str | None, work: Path, cookies: Path | None, ytdlp: str | list[str] = "yt-dlp"
+    code: str,
+    url: str | None,
+    work: Path,
+    cookies: Path | None,
+    ytdlp: str | list[str] = DEFAULT_YTDLP,
 ) -> dict:
     """Write ``meta/<code>.json`` and, for videos, ``audio/<code>.m4a``. Never raises."""
     (work / "meta").mkdir(parents=True, exist_ok=True)
@@ -79,7 +86,15 @@ def fetch_one(
         cookie_args = ["--cookies", str(cookies)] if cookies else []
         meta = trim_meta(code, {}) | {"media_type": None}
         try:
-            result = _run(ytdlp, "--dump-single-json", "--no-warnings", *cookie_args, url)
+            # --ignore-no-formats-error keeps caption and uploader for image posts and carousels
+            result = _run(
+                ytdlp,
+                "--dump-single-json",
+                "--ignore-no-formats-error",
+                "--no-warnings",
+                *cookie_args,
+                url,
+            )
             meta = trim_meta(code, json.loads(result.stdout))
             if meta["media_type"] == "video":
                 # the audio-only stream as served (no ffmpeg needed); a carousel with several
@@ -97,11 +112,7 @@ def fetch_one(
                     url,
                 )
         except (RuntimeError, OSError, json.JSONDecodeError) as e:
-            if "No video formats found" in str(e):
-                # yt-dlp refuses image posts and carousels outright; nothing to retry
-                meta = trim_meta(code, {})
-            else:
-                meta["error"] = str(e)[-500:]
+            meta["error"] = str(e)[-500:]
     path = work / "meta" / f"{code}.json"
     path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta
@@ -112,7 +123,7 @@ def run_fetch(
     codes: list[str],
     cookies: Path | None,
     delay: float,
-    ytdlp: str | list[str] = "yt-dlp",
+    ytdlp: str | list[str] = DEFAULT_YTDLP,
 ) -> dict[str, int]:
     posts = load_posts(work)
     counts = {"fetched": 0, "failed": 0}

@@ -6,6 +6,7 @@ work = "C:/Users/me/unwatched-work"
 profile = "C:/path/to/unwatched/profiles/tech.md"
 master = "C:/Users/me/Documents/reels/master.md"
 digest = false            # true runs `claude -p` after each run to update the master document
+digest_max_turns = 60     # tool turns Claude gets per digest; raise if runs fail on big backlogs
 
 [sources]
 dm = ["https://www.instagram.com/direct/t/<thread-id>/"]

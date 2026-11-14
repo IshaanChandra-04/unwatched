@@ -85,8 +85,33 @@ grid = (
     f"<main>\n{tiles}\n</main>\n</body>\n</html>\n"
 )
 
+# Like Instagram's real grid: 12 tiles at a time, the next batch appended when the viewer nears
+# the bottom, earlier tiles kept in the DOM.
+lazy_hrefs = [f"https://www.instagram.com/p/{shortcode(GRID_BASE + i)}/" for i in range(59, -1, -1)]
+lazy = (
+    '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>Saved • Instagram</title>\n'
+    "<style>\n  .tile { display: block; height: 300px; }\n</style>\n</head>\n<body>\n"
+    '<main id="grid"></main>\n<script>\n'
+    f"const hrefs = {json.dumps(lazy_hrefs)};\nlet next = 0;\n"
+    "function more() {\n"
+    "  const grid = document.getElementById('grid');\n"
+    "  for (let i = 0; i < 12 && next < hrefs.length; i++, next++) {\n"
+    "    const a = document.createElement('a'); a.className = 'tile'; a.href = hrefs[next];\n"
+    "    a.textContent = 'tile ' + next; grid.appendChild(a);\n"
+    "  }\n"
+    "}\n"
+    "more();\n"
+    "window.addEventListener('scroll', () => {\n"
+    "  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600) {\n"
+    "    setTimeout(more, 20);\n"
+    "  }\n"
+    "});\n"
+    "</script>\n</body>\n</html>\n"
+)
+
 here = Path(__file__).parent
 (here / "dm_thread.html").write_text(immediate, encoding="utf-8")
 (here / "dm_thread_delayed.html").write_text(delayed, encoding="utf-8")
 (here / "saved_grid.html").write_text(grid, encoding="utf-8")
-print("wrote dm_thread.html, dm_thread_delayed.html and saved_grid.html")
+(here / "saved_grid_lazy.html").write_text(lazy, encoding="utf-8")
+print("wrote dm_thread.html, dm_thread_delayed.html, saved_grid.html, saved_grid_lazy.html")

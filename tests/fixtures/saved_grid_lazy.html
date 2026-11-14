@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Saved • Instagram</title>
+<style>
+  .tile { display: block; height: 300px; }
+</style>
+</head>
+<body>
+<main id="grid"></main>
+<script>
+const hrefs = ["https://www.instagram.com/p/DS8T93ifAA7/", "https://www.instagram.com/p/DS8T93ifAA6/", "https://www.instagram.com/p/DS8T93ifAA5/", "https://www.instagram.com/p/DS8T93ifAA4/", "https://www.instagram.com/p/DS8T93ifAA3/", "https://www.instagram.com/p/DS8T93ifAA2/", "https://www.instagram.com/p/DS8T93ifAA1/", "https://www.instagram.com/p/DS8T93ifAA0/", "https://www.instagram.com/p/DS8T93ifAAz/", "https://www.instagram.com/p/DS8T93ifAAy/", "https://www.instagram.com/p/DS8T93ifAAx/", "https://www.instagram.com/p/DS8T93ifAAw/", "https://www.instagram.com/p/DS8T93ifAAv/", "https://www.instagram.com/p/DS8T93ifAAu/", "https://www.instagram.com/p/DS8T93ifAAt/", "https://www.instagram.com/p/DS8T93ifAAs/", "https://www.instagram.com/p/DS8T93ifAAr/", "https://www.instagram.com/p/DS8T93ifAAq/", "https://www.instagram.com/p/DS8T93ifAAp/", "https://www.instagram.com/p/DS8T93ifAAo/", "https://www.instagram.com/p/DS8T93ifAAn/", "https://www.instagram.com/p/DS8T93ifAAm/", "https://www.instagram.com/p/DS8T93ifAAl/", "https://www.instagram.com/p/DS8T93ifAAk/", "https://www.instagram.com/p/DS8T93ifAAj/", "https://www.instagram.com/p/DS8T93ifAAi/", "https://www.instagram.com/p/DS8T93ifAAh/", "https://www.instagram.com/p/DS8T93ifAAg/", "https://www.instagram.com/p/DS8T93ifAAf/", "https://www.instagram.com/p/DS8T93ifAAe/", "https://www.instagram.com/p/DS8T93ifAAd/", "https://www.instagram.com/p/DS8T93ifAAc/", "https://www.instagram.com/p/DS8T93ifAAb/", "https://www.instagram.com/p/DS8T93ifAAa/", "https://www.instagram.com/p/DS8T93ifAAZ/", "https://www.instagram.com/p/DS8T93ifAAY/", "https://www.instagram.com/p/DS8T93ifAAX/", "https://www.instagram.com/p/DS8T93ifAAW/", "https://www.instagram.com/p/DS8T93ifAAV/", "https://www.instagram.com/p/DS8T93ifAAU/", "https://www.instagram.com/p/DS8T93ifAAT/", "https://www.instagram.com/p/DS8T93ifAAS/", "https://www.instagram.com/p/DS8T93ifAAR/", "https://www.instagram.com/p/DS8T93ifAAQ/", "https://www.instagram.com/p/DS8T93ifAAP/", "https://www.instagram.com/p/DS8T93ifAAO/", "https://www.instagram.com/p/DS8T93ifAAN/", "https://www.instagram.com/p/DS8T93ifAAM/", "https://www.instagram.com/p/DS8T93ifAAL/", "https://www.instagram.com/p/DS8T93ifAAK/", "https://www.instagram.com/p/DS8T93ifAAJ/", "https://www.instagram.com/p/DS8T93ifAAI/", "https://www.instagram.com/p/DS8T93ifAAH/", "https://www.instagram.com/p/DS8T93ifAAG/", "https://www.instagram.com/p/DS8T93ifAAF/", "https://www.instagram.com/p/DS8T93ifAAE/", "https://www.instagram.com/p/DS8T93ifAAD/", "https://www.instagram.com/p/DS8T93ifAAC/", "https://www.instagram.com/p/DS8T93ifAAB/", "https://www.instagram.com/p/DS8T93ifAAA/"];
+let next = 0;
+function more() {
+  const grid = document.getElementById('grid');
+  for (let i = 0; i < 12 && next < hrefs.length; i++, next++) {
+    const a = document.createElement('a'); a.className = 'tile'; a.href = hrefs[next];
+    a.textContent = 'tile ' + next; grid.appendChild(a);
+  }
+}
+more();
+window.addEventListener('scroll', () => {
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600) {
+    setTimeout(more, 20);
+  }
+});
+</script>
+</body>
+</html>

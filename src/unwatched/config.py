@@ -9,6 +9,7 @@ DEFAULTS = {
     "profile": None,
     "master": None,
     "digest": False,
+    "digest_max_turns": 60,
     "username": None,
     "sources": {"dm": [], "saved": False, "links": [], "export": []},
     "fetch": {"kinds": ["saved", "dm"], "max": 300, "delay": 3},

@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-from unwatched.fetch import fetch_one, pending, select, trim_meta
+from unwatched.fetch import DEFAULT_YTDLP, fetch_one, pending, select, trim_meta
 from unwatched.posts import add_source
 
 FAKE = [sys.executable, str(Path(__file__).parent / "fake_ytdlp.py")]
@@ -72,15 +72,22 @@ def test_pending_retries_failed_posts_and_skips_done(tmp_path):
     ]
 
 
-def test_fetch_one_treats_no_video_formats_as_an_image_post(tmp_path, monkeypatch):
-    monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
+def test_default_ytdlp_is_the_installed_module_not_a_path_lookup():
+    assert DEFAULT_YTDLP == [sys.executable, "-m", "yt_dlp"]
+
+
+def test_fetch_one_keeps_the_caption_of_an_image_post(tmp_path, monkeypatch):
+    # yt-dlp refuses image posts unless told to ignore the missing formats
+    monkeypatch.setenv("FAKE_YTDLP_REQUIRE_IGNORE", "1")
     monkeypatch.setenv(
-        "FAKE_YTDLP_STDERR", "ERROR: [Instagram] DZdk2glJuow: No video formats found!; please"
+        "FAKE_YTDLP_JSON", json.dumps({"uploader": "u", "description": "carousel caption"})
     )
     meta = fetch_one(
         "DZdoibdDSu2", "https://www.instagram.com/p/DZdoibdDSu2/", tmp_path, None, ytdlp=FAKE
     )
     assert meta["media_type"] == "image" and meta["error"] is None
+    assert meta["caption"] == "carousel caption" and meta["uploader"] == "u"
+    assert not (tmp_path / "audio").exists()
 
 
 def test_fetch_one_failure_is_recorded_not_raised(tmp_path, monkeypatch):

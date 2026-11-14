@@ -9,7 +9,7 @@ from unwatched import __version__, schedule
 from unwatched.build import run_build
 from unwatched.config import load_config
 from unwatched.digest import run_digest
-from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
+from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
 from unwatched.run import EXIT_CAP, EXIT_DIGEST, EXIT_LOGIN, LOGIN_MESSAGE, run_all
@@ -59,7 +59,7 @@ def _parser() -> argparse.ArgumentParser:
     fetch.add_argument("--delay", type=float, default=3, help="seconds between posts")
     fetch.add_argument("--only", nargs="*", metavar="CODE", help="fetch exactly these codes")
     fetch.add_argument("--cookies", type=Path, help=f"cookies.txt; default {COOKIES_PATH}")
-    fetch.add_argument("--ytdlp", nargs="+", default=["yt-dlp"], help="yt-dlp command")
+    fetch.add_argument("--ytdlp", nargs="+", default=DEFAULT_YTDLP, help="yt-dlp command")
     transcribe = subs["transcribe"]
     transcribe.add_argument("--model", default="small", help="small (default) or large-v3-turbo")
     transcribe.add_argument("--language", default="en", help="language code, or auto")

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from unwatched.build import run_build
 from unwatched.digest import run_digest
-from unwatched.fetch import COOKIES_PATH, pending, run_fetch, select
+from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, run_fetch, select
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts, now_iso
 from unwatched.state import load_state, save_state
@@ -44,7 +44,7 @@ def _collect_live(cfg: dict, work: Path) -> list:
 
 
 def run_all(
-    cfg: dict, ytdlp: str | list[str] = "yt-dlp", claude: str | list[str] = "claude"
+    cfg: dict, ytdlp: str | list[str] = DEFAULT_YTDLP, claude: str | list[str] = "claude"
 ) -> int:
     work = Path(cfg["work"])
     _setup_logging(work)
@@ -56,6 +56,14 @@ def run_all(
         log.info("%s%s", summary, f"; {error}" if error else "")
         return code
 
+    try:
+        return _chain(cfg, work, ytdlp, claude, finish)
+    except Exception as e:  # the scheduled run has nobody watching stderr
+        log.exception("run crashed")
+        return finish(1, f"{type(e).__name__}: {e}", "run crashed")
+
+
+def _chain(cfg: dict, work: Path, ytdlp, claude, finish) -> int:
     sources = cfg["sources"]
     found = []
     for export in sources["export"]:
@@ -79,21 +87,26 @@ def run_all(
     todo = pending(work, select(posts, set(fetch_cfg["kinds"]), None, None, None))
     if len(todo) > fetch_cfg["max"]:
         error = (
-            f"{len(todo)} posts selected, cap is {fetch_cfg['max']}; "
-            f"run `unwatched fetch --max {len(todo)}` to continue"
+            f"{len(todo)} posts selected, cap is {fetch_cfg['max']}; run "
+            f"`unwatched fetch --work {work} --max {len(todo)}` to continue"
         )
         return finish(EXIT_CAP, error, f"ingested {new} new, fetch stopped at cap")
     cookies = COOKIES_PATH if COOKIES_PATH.exists() else None
     counts = run_fetch(work, todo, cookies, fetch_cfg["delay"], ytdlp)
+    error = None
+    if todo and counts["failed"] == len(todo):
+        error = f"every fetch failed ({len(todo)} posts); check the log and the cookies"
 
     t_cfg = cfg["transcribe"]
     language = None if t_cfg["language"] == "auto" else t_cfg["language"]
     transcribed = run_transcribe(work, load_posts(work), t_cfg["model"], language, None)
     run_build(work, work / "digest-input.md", new_only=True)
 
-    code, error, digest_result = 0, None, "skipped"
+    code, digest_result = 0, "skipped"
     if cfg["digest"] and cfg["profile"] and cfg["master"]:
-        ok, summary = run_digest(work, Path(cfg["profile"]), Path(cfg["master"]), claude)
+        ok, summary = run_digest(
+            work, Path(cfg["profile"]), Path(cfg["master"]), claude, cfg["digest_max_turns"]
+        )
         digest_result = "ok" if ok else "failed"
         if not ok:
             code, error = EXIT_DIGEST, summary.splitlines()[0]

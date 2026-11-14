@@ -60,13 +60,15 @@ def run_digest(
     claude: str | list[str] = "claude",
     max_turns: int = 40,
 ) -> tuple[bool, str]:
+    if not profile.is_file():
+        return False, f"profile not found: {profile}"
     input_path = work / "digest-input.md"
     if run_build(work, input_path, new_only=True) == 0:
         return True, "nothing new"
     with tempfile.TemporaryDirectory(prefix="unwatched-digest-") as tmp:
         box = Path(tmp)
         shutil.copy(input_path, box / "digest-input.md")
-        shutil.copy(profile, box / "profile.md") if profile.exists() else None
+        shutil.copy(profile, box / "profile.md")
         box_master = box / master.name
         if master.exists():
             shutil.copy(master, box_master)
