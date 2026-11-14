@@ -9,7 +9,7 @@ dependencies = [
     "playwright>=1.50",
     "yt-dlp>=2025.1.1",
     "faster-whisper>=1.1",
-    "av<14",
+    "av<19",
 ]
 
 [project.urls]
