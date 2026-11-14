@@ -45,11 +45,18 @@ _GRID_JS = """
 }
 """
 _SCROLL_DOWN_JS = "(step) => window.scrollBy(0, step)"
-_THREAD_HEADER_JS = """
-() => {
-  const h = document.querySelector('main h1, main h2, [role="main"] h1, [role="main"] h2');
-  return h ? h.textContent : null;
-}
+# The conversation header is the first heading in the nearest ancestor of the message list
+# that has one; the inbox sidebar's headings live in a sibling column and are never reached.
+_THREAD_HEADER_JS = f"""
+() => {{
+  let el = ({_SCROLLER_JS})();
+  while (el && el !== document.body) {{
+    const h = el.querySelector('h1, h2');
+    if (h) return h.textContent;
+    el = el.parentElement;
+  }}
+  return null;
+}}
 """
 _PROFILE_LINK_JS = """
 () => {

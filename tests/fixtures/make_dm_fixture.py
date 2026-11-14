@@ -51,10 +51,12 @@ HEAD = """<!doctype html>
 </head>
 <body>
 """
-MAIN = "<main>\n<h2>kungfookah</h2>\n"
-immediate = f'{HEAD}{MAIN}<div id="list">\n{cards}\n{profile}\n</div>\n</main>\n</body>\n</html>\n'
+# Like the real page: the inbox sidebar has its own headings, and the conversation column is a
+# plain section whose header names the other participant.
+MAIN = "<aside>\n<h1>my_own_handle</h1>\n<h2>Messages</h2>\n</aside>\n<section>\n<h2>kungfookah</h2>\n"
+immediate = f'{HEAD}{MAIN}<div id="list">\n{cards}\n{profile}\n</div>\n</section>\n</body>\n</html>\n'
 delayed = (
-    f'{HEAD}{MAIN}<div id="list"></div>\n</main>\n<script>\n'
+    f'{HEAD}{MAIN}<div id="list"></div>\n</section>\n<script>\n'
     f"const srcs = {json.dumps(srcs)};\n"
     "setTimeout(() => {\n"
     "  const list = document.getElementById('list');\n"
