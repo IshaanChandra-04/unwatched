@@ -156,14 +156,16 @@ def apply(work: Path, found: list[Found], seen: bool = False) -> dict[str, int]:
             local = _materialize(work, code, local)
         if add_source(posts, code, src, local_media=local):
             new.append(code)
-    save_posts(work, posts)
     if seen:
-        (work / "meta").mkdir(exist_ok=True)
-        for code in new:
-            meta = json.dumps({"code": code, "skipped": "seeded"})
-            (work / "meta" / f"{code}.json").write_text(meta, encoding="utf-8")
         state = load_state(work)
         if state["last_digest"] is None:
             state["last_digest"] = now_iso()
             save_state(work, state)
+        (work / "meta").mkdir(parents=True, exist_ok=True)
+        for code in new:
+            # dated no later than the last digest, so the next digest does not pick them up
+            posts[code]["first_seen"] = min(posts[code]["first_seen"], state["last_digest"])
+            meta = json.dumps({"code": code, "skipped": "seeded"})
+            (work / "meta" / f"{code}.json").write_text(meta, encoding="utf-8")
+    save_posts(work, posts)
     return counts
