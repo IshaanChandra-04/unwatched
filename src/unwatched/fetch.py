@@ -97,7 +97,11 @@ def fetch_one(
                     url,
                 )
         except (RuntimeError, OSError, json.JSONDecodeError) as e:
-            meta["error"] = str(e)[-500:]
+            if "No video formats found" in str(e):
+                # yt-dlp refuses image posts and carousels outright; nothing to retry
+                meta = trim_meta(code, {})
+            else:
+                meta["error"] = str(e)[-500:]
     path = work / "meta" / f"{code}.json"
     path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta

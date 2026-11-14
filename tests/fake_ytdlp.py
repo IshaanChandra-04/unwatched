@@ -8,7 +8,7 @@ from pathlib import Path
 def main() -> int:
     args = sys.argv[1:]
     if os.environ.get("FAKE_YTDLP_FAIL") == "1":
-        print("ERROR: login required", file=sys.stderr)
+        print(os.environ.get("FAKE_YTDLP_STDERR", "ERROR: login required"), file=sys.stderr)
         return 1
     if "--dump-single-json" in args:
         print(os.environ["FAKE_YTDLP_JSON"])
