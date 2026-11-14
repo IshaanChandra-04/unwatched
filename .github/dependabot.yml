@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # faster-whisper breaks on PyAV 15 and later (metadata_errors); the pin is av<14
+      - dependency-name: av
   - package-ecosystem: github-actions
     directory: /
     schedule:
