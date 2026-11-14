@@ -28,6 +28,8 @@ def _setup_logging(work: Path) -> None:
         handlers=[logging.FileHandler(path, encoding="utf-8"), logging.StreamHandler()],
         force=True,
     )
+    for name in ("huggingface_hub", "faster_whisper"):  # chatty at INFO
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def _collect_live(cfg: dict, work: Path) -> list:
