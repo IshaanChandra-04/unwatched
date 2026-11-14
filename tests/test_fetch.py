@@ -96,3 +96,22 @@ def test_fetch_one_failure_is_recorded_not_raised(tmp_path, monkeypatch):
         "BBBBBBBBBBB", "https://www.instagram.com/p/BBBBBBBBBBB/", tmp_path, None, ytdlp=FAKE
     )
     assert "login required" in meta["error"]
+
+
+def test_pending_gives_up_after_three_failed_fetches(tmp_path):
+    (tmp_path / "meta").mkdir()
+    (tmp_path / "meta" / "AAAAAAAAAAA.json").write_text(
+        '{"error": "private", "retries": 2}', encoding="utf-8"
+    )
+    (tmp_path / "meta" / "BBBBBBBBBBB.json").write_text(
+        '{"error": "private", "retries": 3}', encoding="utf-8"
+    )
+    assert pending(tmp_path, ["AAAAAAAAAAA", "BBBBBBBBBBB"]) == ["AAAAAAAAAAA"]
+
+
+def test_fetch_one_counts_failed_attempts(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
+    url = "https://www.instagram.com/p/BBBBBBBBBBB/"
+    fetch_one("BBBBBBBBBBB", url, tmp_path, None, ytdlp=FAKE)
+    meta = fetch_one("BBBBBBBBBBB", url, tmp_path, None, ytdlp=FAKE)
+    assert meta["retries"] == 2
