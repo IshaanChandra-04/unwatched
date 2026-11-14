@@ -34,7 +34,13 @@ def select(
 
 
 def pending(work: Path, codes: list[str]) -> list[str]:
-    return [c for c in codes if not (work / "meta" / f"{c}.json").exists()]
+    """Codes not fetched yet, plus codes whose last fetch recorded an error (retried next run)."""
+    out = []
+    for code in codes:
+        path = work / "meta" / f"{code}.json"
+        if not path.exists() or json.loads(path.read_text(encoding="utf-8")).get("error"):
+            out.append(code)
+    return out
 
 
 def trim_meta(code: str, info: dict) -> dict:
@@ -76,14 +82,14 @@ def fetch_one(
             result = _run(ytdlp, "--dump-single-json", "--no-warnings", *cookie_args, url)
             meta = trim_meta(code, json.loads(result.stdout))
             if meta["media_type"] == "video":
-                # shortcut: a carousel with several videos keeps only the first audio track;
-                # upgrade to per-entry files if that ever matters
+                # the audio-only stream as served (no ffmpeg needed); a carousel with several
+                # videos keeps only the first; upgrade to per-entry files if that ever matters
                 out = work / "audio" / f"{code}.%(ext)s"
                 _run(
                     ytdlp,
-                    "-x",
-                    "--audio-format",
-                    "m4a",
+                    "-f",
+                    "bestaudio/best",
+                    "--no-playlist",
                     "--no-warnings",
                     "-o",
                     str(out),

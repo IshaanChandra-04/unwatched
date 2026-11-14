@@ -6,16 +6,17 @@ SRC = {"kind": "dm", "name": "t", "via": "live", "ts": None}
 
 def test_todo_skips_done_and_forces_only(tmp_path):
     posts = {}
-    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"):
+    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD"):
         add_source(posts, code, SRC)
     for d in ("audio", "transcripts", "meta"):
         (tmp_path / d).mkdir()
-    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"):
+    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD"):
         (tmp_path / "meta" / f"{code}.json").write_text("{}", encoding="utf-8")
     (tmp_path / "audio" / "AAAAAAAAAAA.m4a").touch()
     (tmp_path / "audio" / "BBBBBBBBBBB.m4a").touch()
+    (tmp_path / "audio" / "DDDDDDDDDDD.mp4").touch()  # yt-dlp may leave audio in an mp4 container
     (tmp_path / "transcripts" / "BBBBBBBBBBB.txt").write_text("done", encoding="utf-8")
-    assert todo(tmp_path, posts, None) == ["AAAAAAAAAAA"]
+    assert todo(tmp_path, posts, None) == ["AAAAAAAAAAA", "DDDDDDDDDDD"]
     assert todo(tmp_path, posts, {"BBBBBBBBBBB", "CCCCCCCCCCC"}) == ["BBBBBBBBBBB"]
     assert audio_path(tmp_path, "CCCCCCCCCCC", posts) is None
 

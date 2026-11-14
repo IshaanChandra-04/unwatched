@@ -11,12 +11,11 @@ TASK_NAME = "unwatched daily"
 
 
 def build_register_script(exe: str, config: str, at: str) -> str:
-    # shortcut: paths are wrapped in PowerShell single quotes, so a path containing a quote
-    # character breaks registration; escape it if that ever happens
+    exe, config = exe.replace("'", "''"), config.replace("'", "''")
     return "\n".join(
         [
             f"$a = New-ScheduledTaskAction -Execute '{exe}' -Argument 'run --config \"{config}\"'",
-            f"$t = New-ScheduledTaskTrigger -Daily -At {at}",
+            f"$t = New-ScheduledTaskTrigger -Daily -At '{at}'",
             "$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun "
             "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries "
             "-ExecutionTimeLimit (New-TimeSpan -Hours 2) -Priority 7",

@@ -20,6 +20,25 @@ def test_ingest_requires_a_source(tmp_path, capsys):
     assert main(["ingest", "--work", str(tmp_path)]) == 2
 
 
+def test_fetch_only_bypasses_the_seen_marker(tmp_path, monkeypatch):
+    import json
+    import sys
+
+    fake = [sys.executable, str(Path(__file__).parent / "fake_ytdlp.py")]
+    monkeypatch.setenv("FAKE_YTDLP_JSON", json.dumps({"uploader": "u", "duration": 5}))
+    main(["ingest", "--links", str(FIX / "links.md"), "--seen", "--work", str(tmp_path)])
+    rc = main(["fetch", "--work", str(tmp_path), "--only", "EEEEEEEEEEE", "--ytdlp", *fake])
+    assert rc == 0
+    meta = json.loads((tmp_path / "meta" / "EEEEEEEEEEE.json").read_text(encoding="utf-8"))
+    assert meta["uploader"] == "u"
+
+
+def test_schedule_install_rejects_a_bad_time(tmp_path, capsys):
+    rc = main(["schedule", "install", "--at", "3pm", "--config", str(tmp_path / "u.toml")])
+    assert rc == 2
+    assert "HH:MM" in capsys.readouterr().err
+
+
 def test_fetch_stops_at_cap_before_any_network(tmp_path, capsys):
     main(["ingest", str(FIX / "export"), "--work", str(tmp_path)])
     rc = main(

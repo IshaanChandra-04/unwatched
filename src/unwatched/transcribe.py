@@ -8,8 +8,8 @@ log = logging.getLogger("unwatched")
 
 
 def audio_path(work: Path, code: str, posts: dict[str, dict]) -> Path | None:
-    audio = work / "audio" / f"{code}.m4a"
-    if audio.exists():
+    audio = next(iter(sorted((work / "audio").glob(f"{code}.*"))), None)
+    if audio is not None:
         return audio
     local = posts.get(code, {}).get("local_media")
     if local and Path(local).exists():

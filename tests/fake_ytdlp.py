@@ -13,7 +13,7 @@ def main() -> int:
     if "--dump-single-json" in args:
         print(os.environ["FAKE_YTDLP_JSON"])
         return 0
-    if "-x" in args:
+    if "-o" in args:
         template = args[args.index("-o") + 1]
         out = Path(template.replace("%(ext)s", "m4a"))
         out.parent.mkdir(parents=True, exist_ok=True)

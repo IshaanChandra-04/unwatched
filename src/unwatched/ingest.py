@@ -94,7 +94,7 @@ def parse_archived(data: dict, media_root: str) -> list[Found]:
     out: list[Found] = []
     for item in data.get("ig_archived_post_media", []):
         for m in item.get("media", []):
-            created = m["creation_timestamp"]
+            created = int(m["creation_timestamp"])
             title = fix_text(m["title"]) if m.get("title") else None
             src = _source("archived", "archive", iso_from_epoch(created, "s"), title)
             out.append((f"archived-{created}", src, media_root + m["uri"]))

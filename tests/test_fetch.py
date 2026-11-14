@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-from unwatched.fetch import fetch_one, select, trim_meta
+from unwatched.fetch import fetch_one, pending, select, trim_meta
 from unwatched.posts import add_source
 
 FAKE = [sys.executable, str(Path(__file__).parent / "fake_ytdlp.py")]
@@ -56,8 +56,20 @@ def test_fetch_one_video_downloads_audio(tmp_path, monkeypatch):
         "AAAAAAAAAAA", "https://www.instagram.com/p/AAAAAAAAAAA/", tmp_path, None, ytdlp=FAKE
     )
     assert meta["media_type"] == "video" and meta["error"] is None
-    assert (tmp_path / "audio" / "AAAAAAAAAAA.m4a").exists()
+    assert list((tmp_path / "audio").glob("AAAAAAAAAAA.*"))
     assert (tmp_path / "meta" / "AAAAAAAAAAA.json").exists()
+
+
+def test_pending_retries_failed_posts_and_skips_done(tmp_path):
+    (tmp_path / "meta").mkdir()
+    (tmp_path / "meta" / "AAAAAAAAAAA.json").write_text('{"error": null}', encoding="utf-8")
+    (tmp_path / "meta" / "BBBBBBBBBBB.json").write_text(
+        '{"error": "login required"}', encoding="utf-8"
+    )
+    assert pending(tmp_path, ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"]) == [
+        "BBBBBBBBBBB",
+        "CCCCCCCCCCC",
+    ]
 
 
 def test_fetch_one_failure_is_recorded_not_raised(tmp_path, monkeypatch):

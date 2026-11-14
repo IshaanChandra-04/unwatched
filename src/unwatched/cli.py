@@ -1,6 +1,7 @@
 """Command line entry point."""
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -58,7 +59,7 @@ def _parser() -> argparse.ArgumentParser:
     fetch.add_argument("--delay", type=float, default=3, help="seconds between posts")
     fetch.add_argument("--only", nargs="*", metavar="CODE", help="fetch exactly these codes")
     fetch.add_argument("--cookies", type=Path, help=f"cookies.txt; default {COOKIES_PATH}")
-    fetch.add_argument("--ytdlp", default="yt-dlp", help="yt-dlp executable")
+    fetch.add_argument("--ytdlp", nargs="+", default=["yt-dlp"], help="yt-dlp command")
     transcribe = subs["transcribe"]
     transcribe.add_argument("--model", default="small", help="small (default) or large-v3-turbo")
     transcribe.add_argument("--language", default="en", help="language code, or auto")
@@ -129,7 +130,8 @@ def cmd_fetch(args) -> int:
     posts = load_posts(args.work)
     only = set(args.only) if args.only else None
     threads = set(args.thread) or None
-    todo = pending(args.work, select(posts, set(args.kinds.split(",")), threads, args.since, only))
+    codes = select(posts, set(args.kinds.split(",")), threads, args.since, only)
+    todo = codes if only else pending(args.work, codes)  # --only re-fetches on purpose
     if len(todo) > args.max:
         print(f"selected {len(todo)} posts, cap is {args.max}; ", end="")
         print(f"rerun with --max {len(todo)} to continue")
@@ -171,6 +173,9 @@ def cmd_schedule(args) -> int:
         if args.action == "install":
             if not args.config:
                 print("schedule install needs --config", file=sys.stderr)
+                return 2
+            if not re.fullmatch(r"\d{2}:\d{2}", args.at):
+                print("--at must be HH:MM, for example 15:00", file=sys.stderr)
                 return 2
             schedule.install(args.at, args.config)
             print(f"registered '{schedule.TASK_NAME}' daily at {args.at}")

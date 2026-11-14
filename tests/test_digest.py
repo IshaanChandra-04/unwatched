@@ -22,21 +22,31 @@ def test_build_prompt_contains_paths_and_mode(tmp_path):
     assert "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in p
 
 
-def test_run_digest_success_updates_state(tmp_path, monkeypatch):
-    work, master = tmp_path / "work", tmp_path / "master.md"
+def test_run_digest_success_copies_back_and_keeps_a_backup(tmp_path):
+    work, master = tmp_path / "work", tmp_path / "docs" / "master.md"
+    master.parent.mkdir()
+    master.write_text("old\n", encoding="utf-8")
     apply(work, ingest_export(FIX))
-    monkeypatch.setenv("FAKE_MASTER", str(master))
     ok, summary = run_digest(work, tmp_path / "tech.md", master, claude=FAKE)
     assert ok and "kept=2" in summary
-    assert master.read_text(encoding="utf-8") == "digested\n"
+    assert master.read_text(encoding="utf-8") == "old\ndigested\n"
+    assert (tmp_path / "docs" / "master.md.bak").read_text(encoding="utf-8") == "old\n"
     assert load_state(work)["last_digest"] is not None
+
+
+def test_run_digest_creates_a_missing_master(tmp_path):
+    work, master = tmp_path / "work", tmp_path / "master.md"
+    apply(work, ingest_export(FIX))
+    ok, _ = run_digest(work, tmp_path / "tech.md", master, claude=FAKE)
+    assert ok and master.read_text(encoding="utf-8") == "digested\n"
 
 
 def test_run_digest_fails_without_marker_or_change(tmp_path, monkeypatch):
     work, master = tmp_path / "work", tmp_path / "master.md"
+    master.write_text("old\n", encoding="utf-8")
     apply(work, ingest_export(FIX))
-    monkeypatch.setenv("FAKE_MASTER", str(master))
     monkeypatch.setenv("FAKE_CLAUDE_SILENT", "1")
     ok, summary = run_digest(work, tmp_path / "tech.md", master, claude=FAKE)
     assert not ok
+    assert master.read_text(encoding="utf-8") == "old\n"
     assert load_state(work)["last_digest"] is None
