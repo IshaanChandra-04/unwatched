@@ -18,9 +18,10 @@ def media_id_to_shortcode(media_id: int) -> str:
 
 
 def shortcode_from_cache_key(key: str) -> str | None:
-    """Decode a thumbnail's ``ig_cache_key`` (base64 of ``<media id>[_<n>]``)."""
+    """Decode a thumbnail's ``ig_cache_key``: base64 of ``<media id>[_<n>]``, URL-encoded, and
+    followed on the CDN by a suffix such as ``.3-ccb7-5``."""
     try:
-        raw = base64.b64decode(unquote(key), validate=True).decode("ascii")
+        raw = base64.b64decode(unquote(key).split(".", 1)[0], validate=True).decode("ascii")
     except (binascii.Error, UnicodeDecodeError, ValueError):
         return None
     digits = raw.split("_", 1)[0]

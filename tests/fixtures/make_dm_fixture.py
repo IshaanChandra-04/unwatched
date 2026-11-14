@@ -1,40 +1,86 @@
-"""Regenerate dm_thread.html: a column-reverse list of 60 reel cards, newest first in DOM order.
+"""Regenerate the browser fixtures.
+
+``dm_thread.html``: a column-reverse list of 60 reel cards, newest first in DOM order, each with a
+thumbnail whose ``ig_cache_key`` is the URL-encoded base64 media id plus Instagram's CDN suffix.
+``dm_thread_delayed.html``: the same cards inserted 1.5 seconds after load, the way Instagram
+fills the list after the page's load event. ``saved_grid.html``: a tall page of 45 saved tiles,
+newest first, each a link to its post.
 
 Run: uv run python tests/fixtures/make_dm_fixture.py
 """
 
 import base64
+import json
 from pathlib import Path
+from urllib.parse import quote
 
-BASE_ID = 3700000000000000000
-COUNT = 60
+DM_BASE = 3700000000000000000
+GRID_BASE = 3800000000000000000
+ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
-cards = []
-for i in range(COUNT - 1, -1, -1):
-    key = base64.b64encode(f"{BASE_ID + i}_1".encode()).decode()
-    cards.append(
-        f'  <div class="card"><img src="https://cdn.example/x.jpg?stp=1&amp;ig_cache_key={key}'
-        f'&amp;_nc=1" alt="reel {i}"></div>'
-    )
 
-html = f"""<!doctype html>
+def shortcode(media_id: int) -> str:
+    out = ""
+    while media_id:
+        media_id, rem = divmod(media_id, 64)
+        out = ALPHABET[rem] + out
+    return out or "A"
+
+
+srcs = []
+for i in range(59, -1, -1):
+    key = quote(base64.b64encode(f"{DM_BASE + i}".encode()).decode()) + ".3-ccb7-5"
+    srcs.append(f"https://cdn.example/x.jpg?stp=1&ig_cache_key={key}&_nc=1")
+
+cards = "\n".join(
+    f'  <div class="card"><img src="{s.replace("&", "&amp;")}" alt="reel {i}"></div>'
+    for i, s in zip(range(59, -1, -1), srcs, strict=True)
+)
+profile = '  <div class="profile">kungfookah · View profile</div>'
+
+HEAD = """<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>kungfookah • Instagram</title>
 <style>
-  #list {{ height: 600px; overflow-y: auto; display: flex; flex-direction: column-reverse; }}
-  .card {{ height: 120px; flex: none; }}
-  .profile {{ height: 200px; flex: none; }}
+  #list { height: 600px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
+  .card { height: 120px; flex: none; }
+  .profile { height: 200px; flex: none; }
 </style>
 </head>
 <body>
-<div id="list">
-{chr(10).join(cards)}
-  <div class="profile">kungfookah · View profile</div>
-</div>
-</body>
-</html>
 """
-Path(__file__).with_name("dm_thread.html").write_text(html, encoding="utf-8")
-print(f"wrote dm_thread.html with {COUNT} cards")
+MAIN = "<main>\n<h2>kungfookah</h2>\n"
+immediate = f'{HEAD}{MAIN}<div id="list">\n{cards}\n{profile}\n</div>\n</main>\n</body>\n</html>\n'
+delayed = (
+    f'{HEAD}{MAIN}<div id="list"></div>\n</main>\n<script>\n'
+    f"const srcs = {json.dumps(srcs)};\n"
+    "setTimeout(() => {\n"
+    "  const list = document.getElementById('list');\n"
+    "  for (const s of srcs) {\n"
+    "    const d = document.createElement('div'); d.className = 'card';\n"
+    "    const img = document.createElement('img'); img.src = s; d.appendChild(img);\n"
+    "    list.appendChild(d);\n"
+    "  }\n"
+    "  const p = document.createElement('div'); p.className = 'profile';\n"
+    "  p.textContent = 'kungfookah · View profile'; list.appendChild(p);\n"
+    "}, 1500);\n"
+    "</script>\n</body>\n</html>\n"
+)
+
+tiles = "\n".join(
+    f'  <a class="tile" href="https://www.instagram.com/p/{shortcode(GRID_BASE + i)}/">tile {i}</a>'
+    for i in range(44, -1, -1)
+)
+grid = (
+    '<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>Saved • Instagram</title>\n'
+    "<style>\n  .tile { display: block; height: 300px; }\n</style>\n</head>\n<body>\n"
+    f"<main>\n{tiles}\n</main>\n</body>\n</html>\n"
+)
+
+here = Path(__file__).parent
+(here / "dm_thread.html").write_text(immediate, encoding="utf-8")
+(here / "dm_thread_delayed.html").write_text(delayed, encoding="utf-8")
+(here / "saved_grid.html").write_text(grid, encoding="utf-8")
+print("wrote dm_thread.html, dm_thread_delayed.html and saved_grid.html")

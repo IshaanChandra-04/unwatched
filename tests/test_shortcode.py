@@ -27,6 +27,11 @@ def test_cache_key_decodes_to_shortcode():
     assert shortcode_from_cache_key(key) == media_id_to_shortcode(3700000000000000000)
 
 
+def test_cache_key_with_cdn_suffix_decodes():
+    key = quote(base64.b64encode(b"3700000000000000000").decode()) + ".3-ccb7-5"
+    assert shortcode_from_cache_key(key) == media_id_to_shortcode(3700000000000000000)
+
+
 def test_cache_key_garbage_is_none():
     assert shortcode_from_cache_key("not-base64!!") is None
     assert shortcode_from_cache_key(base64.b64encode(b"abc").decode()) is None

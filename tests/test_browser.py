@@ -3,11 +3,22 @@ from pathlib import Path
 
 import pytest
 
-from unwatched.browser import codes_from_srcs, sweep_dm
+from unwatched.browser import codes_from_srcs, sweep_dm, sweep_grid
 from unwatched.shortcode import media_id_to_shortcode
 
 FIX = Path(__file__).parent / "fixtures"
 ALL = [media_id_to_shortcode(3700000000000000000 + i) for i in range(59, -1, -1)]
+GRID = [media_id_to_shortcode(3800000000000000000 + i) for i in range(44, -1, -1)]
+
+
+@pytest.mark.browser
+def test_sweep_grid_scrolls_to_the_end_and_stops_at_known(tmp_path):
+    url = (FIX / "saved_grid.html").resolve().as_uri()
+    found = sweep_grid(url, set(), "saved", profile_dir=tmp_path, headless=True, wait_ms=50)
+    assert [c for c, _, _ in found] == GRID
+    assert found[0][1] == {"kind": "saved", "name": "saved", "via": "live", "ts": found[0][1]["ts"]}
+    found = sweep_grid(url, set(GRID[6:]), "saved", profile_dir=tmp_path, headless=True, wait_ms=50)
+    assert [c for c, _, _ in found] == GRID[:6]
 
 
 def test_codes_from_srcs_is_pure():
@@ -23,6 +34,13 @@ def test_sweep_dm_full_collects_everything(tmp_path):
     assert [c for c, _, _ in found] == ALL
     assert found[0][1]["kind"] == "dm" and found[0][1]["via"] == "live"
     assert found[0][1]["name"] == "kungfookah"
+
+
+@pytest.mark.browser
+def test_sweep_dm_waits_for_content_that_loads_late(tmp_path):
+    url = (FIX / "dm_thread_delayed.html").resolve().as_uri()
+    found = sweep_dm(url, set(), profile_dir=tmp_path, full=True, headless=True, wait_ms=50)
+    assert [c for c, _, _ in found] == ALL
 
 
 @pytest.mark.browser
