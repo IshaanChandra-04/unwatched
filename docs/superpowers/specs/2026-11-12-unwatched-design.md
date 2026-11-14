@@ -237,6 +237,20 @@ The repo is also a demonstration of working properly, so:
 - Playwright's Chromium can trip Instagram's automation checks. Keep it headful, keep the persistent profile, add no automation-hiding tricks; if Instagram checkpoints the account, stop and tell the user.
 - `claude -p` output must be checked for the completion marker and the changed file, not just the exit code.
 
+- Learned in the first smoke run (2026-11-14): Instagram's CDN appends a suffix such as
+  `.3-ccb7-5` to `ig_cache_key`; the DM list fills after the page's load event, so wait for
+  content before reading; the tab title is "Instagram • Messages", so the thread's name is the
+  conversation header; the only images with decodable keys are the 200x356 reel thumbnails,
+  avatars carry opaque keys; thread data arrives over a websocket, not HTTP, so response
+  sniffing is not an option.
+- A sandboxed or non-interactive shell cannot spawn the headful browser ("spawn UNKNOWN") and
+  may shadow `%LOCALAPPDATA%`, so `playwright install`, `login` and sweeps run from the user's
+  own terminal; the scheduled task's interactive logon type is what makes the daily run work.
+- On Windows `claude` is a `.CMD` shim: resolve it with `shutil.which` and pass the prompt on
+  stdin, since the prompt starts with `---` and spans lines.
+- yt-dlp downloads the audio stream as served (`-f bestaudio/best`), so ffmpeg is not needed;
+  the file may be `.m4a` or `.mp4`.
+
 ### Left to the builder
 
 - argparse wiring, log format, file naming inside `work/`.
