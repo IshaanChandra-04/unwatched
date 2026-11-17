@@ -13,6 +13,7 @@ DEFAULTS = {
     "master": None,
     "digest": False,
     "digest_max_turns": 60,
+    "claude": "claude",
     "username": None,
     "sources": {"dm": [], "saved": False, "links": [], "export": []},
     "fetch": {"kinds": ["saved", "dm"], "max": 300, "delay": 3},

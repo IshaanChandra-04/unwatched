@@ -32,22 +32,31 @@ def _setup_logging(work: Path) -> None:
         logging.getLogger(name).setLevel(logging.WARNING)
 
 
-def _collect_live(cfg: dict, work: Path) -> list:
-    from unwatched.browser import export_cookies, sweep_dm, sweep_saved
+def _collect_live(cfg: dict, work: Path) -> tuple[list, list[str]]:
+    """Sweep every live source; one that fails is reported, not allowed to lose the others."""
+    from unwatched.browser import LoginRequired, export_cookies, sweep_dm, sweep_saved
 
     known = set(load_posts(work))
     export_cookies()  # refresh the cookies yt-dlp will use; raises LoginRequired if signed out
-    found = []
+    found, errors = [], []
+
+    def attempt(label, sweep, *args, **kwargs):
+        try:
+            found.extend(sweep(*args, **kwargs))
+        except LoginRequired:
+            raise
+        except Exception as e:  # a page that never loads must not lose the other sources' posts
+            log.exception("%s failed", label)
+            errors.append(f"{label} failed: {type(e).__name__}: {e}")
+
     for url in cfg["sources"]["dm"]:
-        found += sweep_dm(url, known)
+        attempt("dm sweep", sweep_dm, url, known)
     if cfg["sources"]["saved"]:
-        found += sweep_saved(known, username=cfg["username"])
-    return found
+        attempt("saved sweep", sweep_saved, known, username=cfg["username"])
+    return found, errors
 
 
-def run_all(
-    cfg: dict, ytdlp: str | list[str] = DEFAULT_YTDLP, claude: str | list[str] = "claude"
-) -> int:
+def run_all(cfg: dict, ytdlp: str | list[str] = DEFAULT_YTDLP) -> int:
     work = Path(cfg["work"])
     _setup_logging(work)
     state = load_state(work)
@@ -59,15 +68,15 @@ def run_all(
         return code
 
     try:
-        return _chain(cfg, work, ytdlp, claude, finish)
+        return _chain(cfg, work, ytdlp, finish)
     except Exception as e:  # the scheduled run has nobody watching stderr
         log.exception("run crashed")
         return finish(1, f"{type(e).__name__}: {e}", "run crashed")
 
 
-def _chain(cfg: dict, work: Path, ytdlp, claude, finish) -> int:
+def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
     sources = cfg["sources"]
-    found = []
+    found, errors = [], []
     for export in sources["export"]:
         found += ingest_export(Path(export))
     for links in sources["links"]:
@@ -76,7 +85,8 @@ def _chain(cfg: dict, work: Path, ytdlp, claude, finish) -> int:
         from unwatched.browser import LoginRequired
 
         try:
-            found += _collect_live(cfg, work)
+            live, errors = _collect_live(cfg, work)
+            found += live
         except LoginRequired:
             return finish(EXIT_LOGIN, LOGIN_MESSAGE, "ingest stopped: sign-in expired")
 
@@ -88,16 +98,15 @@ def _chain(cfg: dict, work: Path, ytdlp, claude, finish) -> int:
     fetch_cfg = cfg["fetch"]
     todo = pending(work, select(posts, set(fetch_cfg["kinds"]), None, None, None))
     if len(todo) > fetch_cfg["max"]:
-        error = (
+        errors.append(
             f"{len(todo)} posts selected, cap is {fetch_cfg['max']}; run "
             f"`unwatched fetch --work {work} --max {len(todo)}` to continue"
         )
-        return finish(EXIT_CAP, error, f"ingested {new} new, fetch stopped at cap")
+        return finish(EXIT_CAP, "; ".join(errors), f"ingested {new} new, fetch stopped at cap")
     cookies = COOKIES_PATH if COOKIES_PATH.exists() else None
     counts = run_fetch(work, todo, cookies, fetch_cfg["delay"], ytdlp)
-    error = None
     if todo and counts["failed"] == len(todo):
-        error = f"every fetch failed ({len(todo)} posts); check the log and the cookies"
+        errors.append(f"every fetch failed ({len(todo)} posts); check the log and the cookies")
 
     t_cfg = cfg["transcribe"]
     language = None if t_cfg["language"] == "auto" else t_cfg["language"]
@@ -107,14 +116,15 @@ def _chain(cfg: dict, work: Path, ytdlp, claude, finish) -> int:
     code, digest_result = 0, "skipped"
     if cfg["digest"] and cfg["profile"] and cfg["master"]:
         ok, summary = run_digest(
-            work, Path(cfg["profile"]), Path(cfg["master"]), claude, cfg["digest_max_turns"]
+            work, Path(cfg["profile"]), Path(cfg["master"]), cfg["claude"], cfg["digest_max_turns"]
         )
         digest_result = "ok" if ok else "failed"
         if not ok:
-            code, error = EXIT_DIGEST, summary.splitlines()[0]
+            code = EXIT_DIGEST
+            errors.append(summary.splitlines()[0])
     return finish(
         code,
-        error,
+        "; ".join(errors) or None,
         f"ingested {new} new, fetched {counts['fetched']}, failed {counts['failed']}, "
         f"transcribed {transcribed}, digest {digest_result}",
     )

@@ -75,3 +75,11 @@ def test_run_digest_keeps_the_users_mcp_servers_out_of_the_run(tmp_path, monkeyp
     run_digest(work, _profile(tmp_path), master, claude=FAKE)
     argv = json.loads((tmp_path / "argv.json").read_text(encoding="utf-8"))
     assert "--strict-mcp-config" in argv
+
+
+def test_run_digest_names_a_missing_claude(tmp_path):
+    work, master = tmp_path / "work", tmp_path / "master.md"
+    apply(work, ingest_export(FIX))
+    ok, summary = run_digest(work, _profile(tmp_path), master, claude="no-such-claude")
+    assert not ok and "claude not found: no-such-claude" in summary
+    assert "unwatched.toml" in summary

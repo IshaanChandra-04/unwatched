@@ -7,6 +7,7 @@ def test_defaults_when_no_file():
     cfg = load_config(None)
     assert cfg["fetch"] == {"kinds": ["saved", "dm"], "max": 300, "delay": 3}
     assert cfg["digest"] is False and cfg["digest_max_turns"] == 60
+    assert cfg["claude"] == "claude"
     assert cfg["transcribe"]["model"] == "small"
 
 
