@@ -130,7 +130,8 @@ def cmd_fetch(args) -> int:
     posts = load_posts(args.work)
     only = set(args.only) if args.only else None
     threads = set(args.thread) or None
-    codes = select(posts, set(args.kinds.split(",")), threads, args.since, only)
+    kinds = {k.strip() for k in args.kinds.split(",")}
+    codes = select(posts, kinds, threads, args.since, only)
     todo = codes if only else pending(args.work, codes)  # --only re-fetches on purpose
     if len(todo) > args.max:
         print(f"selected {len(todo)} posts, cap is {args.max}; ", end="")
@@ -176,6 +177,11 @@ def cmd_schedule(args) -> int:
                 return 2
             if not re.fullmatch(r"\d{2}:\d{2}", args.at):
                 print("--at must be HH:MM, for example 15:00", file=sys.stderr)
+                return 2
+            try:
+                load_config(args.config)
+            except (OSError, ValueError) as e:  # a TOML syntax error is a ValueError
+                print(f"cannot read {args.config}: {e}", file=sys.stderr)
                 return 2
             schedule.install(args.at, args.config)
             print(f"registered '{schedule.TASK_NAME}' daily at {args.at}")

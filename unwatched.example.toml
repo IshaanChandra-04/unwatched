@@ -1,6 +1,6 @@
 # Copy this file somewhere outside the repo (for example ~/.unwatched/unwatched.toml)
 # and point `unwatched run --config <path>` at it. Relative paths resolve from the
-# folder this file is in.
+# folder this file is in; ~ is your home folder.
 
 work = "C:/Users/me/unwatched-work"
 profile = "C:/path/to/unwatched/profiles/tech.md"

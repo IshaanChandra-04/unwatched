@@ -1,3 +1,4 @@
+import logging
 import sys
 from pathlib import Path
 
@@ -53,3 +54,11 @@ def test_run_all_with_file_sources_only(tmp_path):
     assert state["last_summary"].startswith("ingested 6 new, fetched 0")
     assert (tmp_path / "w" / "digest-input.md").exists()
     assert list((tmp_path / "w" / "logs").glob("*.log"))
+
+
+def test_run_log_quiets_the_transcription_libraries(tmp_path):
+    run_all(_cfg(tmp_path), ytdlp=FAKE_YTDLP)
+    logging.getLogger("faster_whisper").info("Processing audio with duration 00:42")
+    logging.getLogger("huggingface_hub").info("Fetching 5 files")
+    text = next((tmp_path / "w" / "logs").glob("*.log")).read_text(encoding="utf-8")
+    assert "Processing audio" not in text and "Fetching 5 files" not in text

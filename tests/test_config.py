@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from unwatched.config import load_config
 
 
@@ -28,3 +30,17 @@ def test_example_config_parses_and_resolves_paths(tmp_path):
     assert cfg["fetch"]["max"] == 50 and cfg["fetch"]["delay"] == 3
     assert cfg["sources"]["dm"] == ["https://www.instagram.com/direct/t/1/"]
     assert cfg["sources"]["saved"] is True
+
+
+def test_tilde_expands_to_the_home_folder(tmp_path):
+    (tmp_path / "u.toml").write_text(
+        'work = "~/uw"\nprofile = "~/p.md"\nmaster = "~/m.md"\n'
+        '[sources]\nlinks = ["~/l.md"]\nexport = ["~/e.zip"]\n',
+        encoding="utf-8",
+    )
+    cfg = load_config(tmp_path / "u.toml")
+    home = Path.home()
+    assert cfg["work"] == str(home / "uw")
+    assert cfg["profile"] == str(home / "p.md") and cfg["master"] == str(home / "m.md")
+    assert cfg["sources"]["links"] == [str(home / "l.md")]
+    assert cfg["sources"]["export"] == [str(home / "e.zip")]

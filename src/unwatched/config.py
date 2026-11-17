@@ -1,4 +1,7 @@
-"""Load ``unwatched.toml`` over the defaults; relative paths resolve from the file's folder."""
+"""Load ``unwatched.toml`` over the defaults.
+
+Relative paths resolve from the file's folder; ``~`` is the home folder.
+"""
 
 import copy
 import tomllib
@@ -30,7 +33,7 @@ def load_config(path: Path | None) -> dict:
     base = path.parent
 
     def resolve(p: str) -> str:
-        return str(base / p)
+        return str(base / Path(p).expanduser())
 
     for key in ("work", "profile", "master"):
         if cfg[key]:

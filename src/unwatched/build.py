@@ -17,6 +17,11 @@ def load_transcript(work: Path, code: str) -> str | None:
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
 
 
+def _quote(text: str) -> str:
+    """Mark every line, so text written by strangers reads as data, not as instructions."""
+    return "\n".join(f"> {line}" for line in text.splitlines())
+
+
 def _caption(rec: dict, meta: dict) -> str:
     if meta.get("caption"):
         return meta["caption"]
@@ -43,7 +48,7 @@ def render(
         sources = "; ".join(f"{s['kind']}: {s['name']}" for s in rec["sources"])
         lines.append(
             f"| {rec['first_seen'][:10]} | {meta.get('uploader') or 'unknown'} "
-            f"| {meta.get('media_type', '?')} | {rec['url'] or '(archived)'} | {sources} |"
+            f"| {meta.get('media_type') or '?'} | {rec['url'] or '(archived)'} | {sources} |"
         )
     for code in codes:
         rec, meta = posts[code], metas.get(code, {})
@@ -54,12 +59,14 @@ def render(
             "",
             f"Link: {rec['url'] or '(archived post, no link)'}",
             f"Sources: {sources}",
-            f"Caption: {_caption(rec, meta)}",
+            "Caption:",
+            "",
+            _quote(_caption(rec, meta)),
             "",
         ]
         transcript = transcripts.get(code)
         if transcript:
-            lines += ["Transcript:", "", transcript]
+            lines += ["Transcript:", "", _quote(transcript)]
         elif transcript == "" and meta.get("media_type") == "video":
             lines.append("_video, no speech detected_")
         elif meta.get("media_type") == "video":

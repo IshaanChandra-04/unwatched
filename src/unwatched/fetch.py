@@ -37,11 +37,12 @@ def select(
 
 
 def pending(work: Path, codes: list[str]) -> list[str]:
-    """Codes not fetched yet, plus codes whose last fetch recorded an error (retried next run)."""
+    """Codes not fetched yet, plus codes whose fetch has failed fewer than three times."""
     out = []
     for code in codes:
         path = work / "meta" / f"{code}.json"
-        if not path.exists() or json.loads(path.read_text(encoding="utf-8")).get("error"):
+        meta = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        if meta is None or (meta.get("error") and meta.get("retries", 0) < 3):
             out.append(code)
     return out
 
@@ -79,7 +80,8 @@ def fetch_one(
     ytdlp: str | list[str] = DEFAULT_YTDLP,
 ) -> dict:
     """Write ``meta/<code>.json`` and, for videos, ``audio/<code>.m4a``. Never raises."""
-    (work / "meta").mkdir(parents=True, exist_ok=True)
+    path = work / "meta" / f"{code}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
     if url is None:  # archived post shipped inside the export
         meta = trim_meta(code, {"duration": 1}) | {"local": True, "duration": None}
     else:
@@ -113,7 +115,8 @@ def fetch_one(
                 )
         except (RuntimeError, OSError, json.JSONDecodeError) as e:
             meta["error"] = str(e)[-500:]
-    path = work / "meta" / f"{code}.json"
+            prior = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            meta["retries"] = prior.get("retries", 0) + 1
     path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta
 

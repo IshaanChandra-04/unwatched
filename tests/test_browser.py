@@ -1,9 +1,12 @@
 import base64
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from unwatched.browser import _is_blocked, codes_from_srcs, sweep_dm, sweep_grid
+from unwatched import browser
+from unwatched.browser import _is_blocked, codes_from_srcs, login, sweep_dm, sweep_grid
 from unwatched.shortcode import media_id_to_shortcode
 
 FIX = Path(__file__).parent / "fixtures"
@@ -65,3 +68,40 @@ def test_sweep_dm_stops_after_known_streak(tmp_path):
     found = sweep_dm(url, known, profile_dir=tmp_path, headless=True, wait_ms=50)
     codes = [c for c, _, _ in found]
     assert codes[:5] == ALL[:5] and len(codes) < 40
+
+
+@pytest.mark.browser
+def test_sweep_dm_without_a_header_is_named_after_the_last_url_segment(tmp_path):
+    page = tmp_path / "mythread.html"  # no trailing slash, like a pasted thread URL
+    page.write_text(
+        '<!DOCTYPE html><a href="https://www.instagram.com/p/AAAAAAAAAAA/">x</a>', encoding="utf-8"
+    )
+    found = sweep_dm(
+        page.as_uri(), set(), profile_dir=tmp_path / "profile", headless=True, wait_ms=50
+    )
+    assert [c for c, _, _ in found] == ["AAAAAAAAAAA"]
+    assert found[0][1]["name"] == "mythreadhtml"  # the fallback keeps word characters only
+
+
+def test_login_needs_a_session_cookie_on_a_page_that_is_not_blocked(tmp_path, monkeypatch):
+    class Page:
+        url = "https://www.instagram.com/accounts/login/"
+
+        def goto(self, url):
+            pass
+
+    class Ctx:
+        pages = [Page()]
+
+        def cookies(self):
+            return [{"name": "sessionid", "domain": ".instagram.com"}]
+
+    @contextmanager
+    def fake_context(profile_dir, headless):
+        yield Ctx()
+
+    monkeypatch.setattr(browser, "_context", fake_context)
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    assert login(profile_dir=tmp_path, timeout_s=0.01) is False
+    Page.url = "https://www.instagram.com/"
+    assert login(profile_dir=tmp_path, timeout_s=0.01) is True

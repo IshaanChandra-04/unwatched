@@ -3,8 +3,8 @@ import zipfile
 from pathlib import Path
 
 from unwatched.ingest import apply, fix_text, ingest_export, ingest_links, iso_from_epoch
-from unwatched.posts import load_posts
-from unwatched.state import load_state
+from unwatched.posts import load_posts, new_since
+from unwatched.state import load_state, save_state
 
 FIX = Path(__file__).parent / "fixtures" / "export"
 LINKS = Path(__file__).parent / "fixtures" / "links.md"
@@ -86,3 +86,9 @@ def test_apply_seen_marks_meta_and_sets_last_digest(tmp_path):
     meta = json.loads((tmp_path / "meta" / "EEEEEEEEEEE.json").read_text(encoding="utf-8"))
     assert meta["skipped"] == "seeded"
     assert load_state(tmp_path)["last_digest"] is not None
+
+
+def test_apply_seen_after_a_digest_keeps_seeded_posts_out_of_the_next_one(tmp_path):
+    save_state(tmp_path, load_state(tmp_path) | {"last_digest": "2026-01-01T00:00:00Z"})
+    apply(tmp_path, ingest_links(LINKS), seen=True)
+    assert new_since(load_posts(tmp_path), "2026-01-01T00:00:00Z") == []

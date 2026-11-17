@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -65,3 +66,12 @@ def test_run_digest_fails_without_marker_or_change(tmp_path, monkeypatch):
     assert not ok
     assert master.read_text(encoding="utf-8") == "old\n"
     assert load_state(work)["last_digest"] is None
+
+
+def test_run_digest_keeps_the_users_mcp_servers_out_of_the_run(tmp_path, monkeypatch):
+    work, master = tmp_path / "work", tmp_path / "master.md"
+    apply(work, ingest_export(FIX))
+    monkeypatch.setenv("FAKE_CLAUDE_ARGV", str(tmp_path / "argv.json"))
+    run_digest(work, _profile(tmp_path), master, claude=FAKE)
+    argv = json.loads((tmp_path / "argv.json").read_text(encoding="utf-8"))
+    assert "--strict-mcp-config" in argv

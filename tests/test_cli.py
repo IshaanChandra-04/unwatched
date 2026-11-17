@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from unwatched import schedule
 from unwatched.cli import main
 
 FIX = Path(__file__).parent / "fixtures"
@@ -47,3 +50,21 @@ def test_fetch_stops_at_cap_before_any_network(tmp_path, capsys):
     assert rc == 4
     assert "cap is 1" in capsys.readouterr().out
     assert not (tmp_path / "meta").exists() or not list((tmp_path / "meta").iterdir())
+
+
+def test_fetch_kinds_tolerates_spaces(tmp_path, capsys):
+    main(["ingest", str(FIX / "export"), "--work", str(tmp_path)])
+    rc = main(
+        ["fetch", "--work", str(tmp_path), "--kinds", "dm ", "--max", "1", "--ytdlp", "no-program"]
+    )
+    assert rc == 4
+    assert "cap is 1" in capsys.readouterr().out
+
+
+def test_schedule_install_refuses_an_unreadable_config(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(schedule, "install", lambda *a, **k: pytest.fail("install was called"))
+    assert main(["schedule", "install", "--config", str(tmp_path / "missing.toml")]) == 2
+    bad = tmp_path / "bad.toml"
+    bad.write_text("work = [unclosed\n", encoding="utf-8")
+    assert main(["schedule", "install", "--config", str(bad)]) == 2
+    assert "bad.toml" in capsys.readouterr().err
