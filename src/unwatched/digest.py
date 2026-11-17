@@ -95,6 +95,9 @@ def run_digest(
                 encoding="utf-8",
                 errors="replace",
             )
+        except FileNotFoundError:
+            hint = 'install Claude Code or set claude = "<path to it>" in unwatched.toml'
+            return False, f"claude not found: {cmd[0]}; {hint}"
         except OSError as e:
             return False, f"could not run claude: {e}"
         output = (result.stdout or "") + (result.stderr or "")

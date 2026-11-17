@@ -77,6 +77,9 @@ What can hold it up:
   update the master document. If it fails, the run exits 5, `status` shows the reason, and the
   next run offers the same posts again, so raise the limit in your config or run
   `unwatched digest` by hand with `--max-turns`.
+- **Claude not on PATH.** The scheduled job sees a smaller PATH than your shell, and a Node
+  upgrade can remove the `claude` command. If `status` shows `claude not found`, set
+  `claude = "<full path to claude>"` in your config.
 - **Every fetch failed.** Usually the Instagram session or cookies went stale. `status` says so;
   run `unwatched login` once.
 

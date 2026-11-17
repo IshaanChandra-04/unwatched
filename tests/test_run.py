@@ -2,6 +2,7 @@ import logging
 import sys
 from pathlib import Path
 
+from unwatched.posts import load_posts
 from unwatched.run import run_all
 from unwatched.state import load_state
 
@@ -16,6 +17,7 @@ def _cfg(tmp_path, **over):
         "master": None,
         "digest": False,
         "digest_max_turns": 60,
+        "claude": "claude",
         "username": None,
         "sources": {
             "dm": [],
@@ -62,3 +64,44 @@ def test_run_log_quiets_the_transcription_libraries(tmp_path):
     logging.getLogger("huggingface_hub").info("Fetching 5 files")
     text = next((tmp_path / "w" / "logs").glob("*.log")).read_text(encoding="utf-8")
     assert "Processing audio" not in text and "Fetching 5 files" not in text
+
+
+def test_run_all_keeps_dm_posts_when_the_saved_sweep_fails(tmp_path, monkeypatch):
+    import unwatched.browser as browser
+
+    dm_post = (
+        "DQ6yR4LMvxY",
+        {"kind": "dm", "name": "t", "via": "live", "ts": "2026-11-16T00:00:00Z"},
+        None,
+    )
+    monkeypatch.setattr(browser, "export_cookies", lambda: None)
+    monkeypatch.setattr(browser, "sweep_dm", lambda url, known: [dm_post])
+
+    def slow_page(known, username=None):
+        raise TimeoutError("Page.goto: Timeout 30000ms exceeded")
+
+    monkeypatch.setattr(browser, "sweep_saved", slow_page)
+    live = {
+        "dm": ["https://www.instagram.com/direct/t/1/"],
+        "saved": True,
+        "links": [],
+        "export": [],
+    }
+    assert run_all(_cfg(tmp_path, sources=live), ytdlp=FAKE_YTDLP) == 0
+    assert "DQ6yR4LMvxY" in load_posts(tmp_path / "w")
+    state = load_state(tmp_path / "w")
+    assert state["last_summary"].startswith("ingested 1 new")
+    assert "saved sweep failed" in state["last_error"] and "Timeout" in state["last_error"]
+
+
+def test_run_all_passes_the_configured_claude_to_the_digest(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_digest(work, profile, master, claude, max_turns):
+        seen["claude"] = claude
+        return True, "digest kept=0 total=0"
+
+    monkeypatch.setattr("unwatched.run.run_digest", fake_digest)
+    cfg = _cfg(tmp_path, digest=True, profile="p.md", master="m.md", claude="C:/tools/claude.exe")
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
+    assert seen["claude"] == "C:/tools/claude.exe"

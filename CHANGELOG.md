@@ -6,8 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `claude` config key: the Claude Code executable the daily digest runs, for machines where the
+  scheduled job's PATH does not include it.
+
 ### Fixed
 
+- `run`: a live source that fails (a saved page that never finishes loading, say) no longer
+  crashes the run and loses what the other sources found; the error goes to the log and
+  `status`, and the chain continues with the posts it has.
+- `digest`: a missing `claude` command is reported as `claude not found: <name>` with the config
+  key to set, instead of a bare operating-system file error.
 - `ingest --dm`: a thread URL without a trailing slash names the thread after its id, not `t`.
 - `login`: a session cookie on Instagram's login or challenge page no longer counts as signed in,
   so a session Instagram invalidated does not loop through "run unwatched login".
