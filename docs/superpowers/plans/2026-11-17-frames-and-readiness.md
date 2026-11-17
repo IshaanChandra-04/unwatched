@@ -50,25 +50,35 @@
 ```python
 # tests/test_build.py
 def test_materials_lists_what_exists(tmp_path):
-    (tmp_path / "transcripts").mkdir(); (tmp_path / "frames").mkdir()
+    (tmp_path / "transcripts").mkdir()
+    (tmp_path / "frames").mkdir()
     (tmp_path / "transcripts" / "AAAAAAAAAAA.txt").write_text("hi", encoding="utf-8")
     (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("screen", encoding="utf-8")
-    assert materials(tmp_path, "AAAAAAAAAAA", POSTS["AAAAAAAAAAA"], {"caption": "c"}) == ["caption", "transcript", "frames"]
+    assert materials(tmp_path, "AAAAAAAAAAA", POSTS["AAAAAAAAAAA"], {"caption": "c"}) == [
+        "caption",
+        "transcript",
+        "frames",
+    ]
     assert materials(tmp_path, "BBBBBBBBBBB", POSTS["BBBBBBBBBBB"], {}) == []
+
 
 def test_due_lists_new_posts_and_posts_with_new_material(tmp_path):
     state = {"last_digest": "2026-01-01T00:00:00Z", "digested": {"AAAAAAAAAAA": ["caption"]}}
-    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]          # A seen, B never
+    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]  # A seen, B never
     (tmp_path / "frames").mkdir()
     (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("x", encoding="utf-8")
     assert due(tmp_path, POSTS, state) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]  # A gained frames
 
+
 def test_due_migrates_an_old_state_without_redigesting(tmp_path):
     state = {"last_digest": "2025-10-31T12:00:00Z", "digested": {}}
-    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]   # A (first seen 10-31 08:40) is old
+    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]  # A (first seen 10-31 08:40) is old
     assert "AAAAAAAAAAA" in state["digested"]
 
-def test_run_build_new_only_caps_and_returns_codes(tmp_path): ...  # two due posts, max_posts=1 → ["AAAAAAAAAAA"]
+
+def test_run_build_new_only_caps_and_returns_codes(
+    tmp_path,
+): ...  # two due posts, max_posts=1 → ["AAAAAAAAAAA"]
 ```
 
 ```python
@@ -286,9 +296,13 @@ def test_frames_and_describe_commands_run_on_an_empty_work_dir(tmp_path, capsys)
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_checks_report_a_missing_claude_only_when_the_digest_is_on(monkeypatch): ...  # which → None; cfg digest True → ("claude", False, ...); digest False → no claude check
+def test_checks_report_a_missing_claude_only_when_the_digest_is_on(
+    monkeypatch,
+): ...  # which → None; cfg digest True → ("claude", False, ...); digest False → no claude check
 def test_checks_flag_a_missing_profile(tmp_path): ...
-def test_doctor_exit_code_follows_the_checks(tmp_path, capsys, monkeypatch): ...  # monkeypatch checks → [("x", False, "fix me")] → returns 1, output has "fix  x: fix me"
+def test_doctor_exit_code_follows_the_checks(
+    tmp_path, capsys, monkeypatch
+): ...  # monkeypatch checks → [("x", False, "fix me")] → returns 1, output has "fix  x: fix me"
 ```
 
 - [ ] **Step 2: Run to verify they fail.**
@@ -326,3 +340,15 @@ def test_doctor_exit_code_follows_the_checks(tmp_path, capsys, monkeypatch): ...
 
 - [ ] Push the branch, open the PR (body: what changed, how to try it, cost note), `gh pr checks N --watch`, merge with `--merge --delete-branch`.
 - [ ] Release 0.2.0 on a `release/0.2.0` branch with the existing bump script pattern (`pyproject`, `__init__`, `plugin.json`, CHANGELOG date, `uv lock`), tag `v0.2.0`, GitHub release notes, `uv tool install --force --reinstall "<repo>"` from the user's terminal (no `--with-executables-from playwright` any more), `unwatched doctor`.
+
+## Changes after the baseline audit (2026-11-17)
+
+A report-only audit of the 0.1.1 tree (ledger: `.superpowers/sdd/2026-11-17-frames-and-readiness/audit.md`) added these to the tasks above, in the task that owns the code:
+
+- Task 2: `_run` gets `timeout=300` and a `TimeoutExpired` is recorded like any fetch failure (one stalled download must not hold the run).
+- Task 6: the config loader rejects unknown keys and wrong types (`sources.dm` must be a list, ...) with a `ValueError` that `cmd_run` prints; `digest = true` without `profile` and `master` is reported in the summary instead of "skipped"; the four profiles ship inside the wheel and `profile = "tech"` resolves to the packaged one; `main()` configures INFO logging so hand-run commands show progress and returns 130 on Ctrl-C.
+- Task 7: the saved-page username lookup raises a `RuntimeError` naming the `username` key instead of `LoginRequired` (Instagram in another language is not an expired session).
+- Task 9: the platform check moves into the PowerShell runner so `status` and `remove` do not crash on macOS and Linux; the Linux cron line carries `DISPLAY=:0` and the full executable path.
+- Task 10: `requires-python = ">=3.11,<3.14"` (PyAV 13 has no 3.14 wheels), classifiers and keywords, CI on Python 3.11 and 3.13, browser tests on every OS, `CODE_OF_CONDUCT.md`, a bug-report issue form, README first-run notes (Claude Code needed for the digest, Whisper model download size, `playwright install --with-deps` on Linux, PATH, `~/` paths in the example config, the 2-hour task limit).
+- Task 12 (new): atomic writes for `posts.jsonl` and `state.json`; a round cap on the sweep loop; one bad export file is skipped with a warning instead of aborting ingest; `uploader` is escaped in the index table; the fixture thread name becomes `alt_account`; dead `handler is None` branch removed.
+- Task 11 also sets the GitHub topics from the owner's terminal.
