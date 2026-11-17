@@ -1,13 +1,18 @@
 import json
 import re
+import tomllib
 from pathlib import Path
+
+from unwatched import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_plugin_manifest_and_skill_frontmatter():
     manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    assert manifest["name"] == "unwatched" and manifest["version"] == "0.1.0"
+    assert manifest["name"] == "unwatched" and manifest["version"] == __version__
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["project"]["version"] == __version__
     skill = (ROOT / "skills" / "unwatched" / "SKILL.md").read_text(encoding="utf-8")
     assert skill.startswith("---\nname: unwatched\n")
     assert "UNWATCHED_DIGEST_DONE kept=<n> total=<m>" in skill

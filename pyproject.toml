@@ -1,6 +1,6 @@
 [project]
 name = "unwatched"
-version = "0.1.0"
+version = "0.1.1"
 description = "Turn the reels you saved or sent yourself into a document you will actually read."
 readme = "README.md"
 license = "MIT"

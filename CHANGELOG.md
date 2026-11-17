@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-17
+
 ### Added
 
 - `claude` config key: the Claude Code executable the daily digest runs, for machines where the
