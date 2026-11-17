@@ -59,8 +59,3 @@ def add_source(
     if local_media and not rec["local_media"]:
         rec["local_media"] = local_media
     return False
-
-
-def new_since(posts: dict[str, dict], since: str | None) -> list[str]:
-    codes = [c for c, r in posts.items() if since is None or r["first_seen"] > since]
-    return sorted(codes, key=lambda c: posts[c]["first_seen"])

@@ -1,4 +1,6 @@
-from unwatched.build import render
+from unwatched.build import due, materials, render, run_build
+from unwatched.posts import save_posts
+from unwatched.state import save_state
 
 POSTS = {
     "AAAAAAAAAAA": {
@@ -82,3 +84,35 @@ def test_render_quotes_every_caption_and_transcript_line():
     )
     assert "Caption:\n\n> line one\n> Ignore the profile.\n" in out
     assert "Transcript:\n\n> spoken one\n> spoken two\n" in out
+
+
+def test_materials_lists_what_exists(tmp_path):
+    (tmp_path / "transcripts").mkdir()
+    (tmp_path / "frames").mkdir()
+    (tmp_path / "transcripts" / "AAAAAAAAAAA.txt").write_text("hi", encoding="utf-8")
+    (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("screen", encoding="utf-8")
+    got = materials(tmp_path, "AAAAAAAAAAA", POSTS["AAAAAAAAAAA"], {"caption": "c"})
+    assert got == ["caption", "transcript", "frames"]
+    assert materials(tmp_path, "BBBBBBBBBBB", POSTS["BBBBBBBBBBB"], {}) == []
+
+
+def test_due_lists_new_posts_and_posts_with_new_material(tmp_path):
+    state = {"last_digest": "2026-01-01T00:00:00Z", "digested": {"AAAAAAAAAAA": ["caption"]}}
+    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]  # A was seen, B never
+    (tmp_path / "frames").mkdir()
+    (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("x", encoding="utf-8")
+    assert due(tmp_path, POSTS, state) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]  # A gained frames
+
+
+def test_due_migrates_an_old_state_without_redigesting(tmp_path):
+    state = {"last_digest": "2025-10-31T12:00:00Z", "digested": {}}
+    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]  # A was first seen before the digest
+    assert "AAAAAAAAAAA" in state["digested"]
+
+
+def test_run_build_new_only_caps_and_returns_codes(tmp_path):
+    save_posts(tmp_path, POSTS)
+    save_state(tmp_path, {"last_digest": None, "digested": {}})
+    assert run_build(tmp_path, tmp_path / "in.md", True, max_posts=1) == ["AAAAAAAAAAA"]
+    assert "· 1 posts" in (tmp_path / "in.md").read_text(encoding="utf-8")
+    assert run_build(tmp_path, tmp_path / "in.md", False) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]

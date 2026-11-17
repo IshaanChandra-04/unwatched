@@ -8,7 +8,7 @@ _DEFAULTS = {"last_run": None, "last_digest": None, "last_error": None, "last_su
 
 def load_state(work: Path) -> dict:
     path = work / "state.json"
-    state = dict(_DEFAULTS)
+    state = dict(_DEFAULTS) | {"digested": {}}  # code -> materials the digest has seen
     if path.exists():
         state.update(json.loads(path.read_text(encoding="utf-8")))
     return state

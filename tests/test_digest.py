@@ -83,3 +83,13 @@ def test_run_digest_names_a_missing_claude(tmp_path):
     ok, summary = run_digest(work, _profile(tmp_path), master, claude="no-such-claude")
     assert not ok and "claude not found: no-such-claude" in summary
     assert "unwatched.toml" in summary
+
+
+def test_run_digest_records_materials_and_reports_the_rest(tmp_path):
+    work, master = tmp_path / "work", tmp_path / "master.md"
+    apply(work, ingest_export(FIX))  # five posts
+    ok, summary = run_digest(work, _profile(tmp_path), master, claude=FAKE, max_posts=2)
+    assert ok and len(load_state(work)["digested"]) == 2
+    assert "3 more waiting" in summary and "unwatched digest" in summary
+    ok, summary = run_digest(work, _profile(tmp_path), master, claude=FAKE, max_posts=2)
+    assert ok and len(load_state(work)["digested"]) == 4 and "1 more waiting" in summary

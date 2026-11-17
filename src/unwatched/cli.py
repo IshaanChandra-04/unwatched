@@ -121,8 +121,8 @@ def cmd_ingest(args) -> int:
 
 def cmd_build(args) -> int:
     out = args.out or args.work / "digest-input.md"
-    n = run_build(args.work, out, args.new_only)
-    print(f"wrote {out} with {n} posts")
+    codes = run_build(args.work, out, args.new_only)
+    print(f"wrote {out} with {len(codes)} posts")
     return 0
 
 

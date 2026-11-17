@@ -8,6 +8,7 @@ def test_state_defaults_and_roundtrip(tmp_path):
         "last_digest": None,
         "last_error": None,
         "last_summary": None,
+        "digested": {},
     }
     state["last_run"] = "2026-11-14T15:00:00Z"
     save_state(tmp_path, state)
