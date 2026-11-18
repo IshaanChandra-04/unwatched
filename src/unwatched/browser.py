@@ -3,6 +3,8 @@
 import logging
 import re
 import shutil
+import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -106,9 +108,15 @@ def codes_from_srcs(srcs: list[str]) -> list[str]:
     return list(dict.fromkeys(codes))
 
 
+def install_chromium() -> None:
+    """Download the browser Playwright drives (about 200 MB), once."""
+    log.info("downloading the browser (about 200 MB, first time only)")
+    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+
+
 @contextmanager
 def _context(profile_dir: Path, headless: bool):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import Error, sync_playwright
 
     profile_dir.mkdir(parents=True, exist_ok=True)
     for d in (profile_dir.parent, profile_dir):
@@ -117,9 +125,19 @@ def _context(profile_dir: Path, headless: bool):
         except OSError:
             pass
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            str(profile_dir), headless=headless, viewport={"width": 1280, "height": 900}
-        )
+
+        def launch():
+            return p.chromium.launch_persistent_context(
+                str(profile_dir), headless=headless, viewport={"width": 1280, "height": 900}
+            )
+
+        try:
+            ctx = launch()
+        except Error as e:
+            if "Executable doesn't exist" not in str(e):
+                raise
+            install_chromium()
+            ctx = launch()
         try:
             yield ctx
         finally:
@@ -309,8 +327,11 @@ def sweep_saved(
             _check_login(page)
             page.wait_for_timeout(wait_ms)
             href = page.evaluate(_PROFILE_LINK_JS)
-            if not href:
-                raise LoginRequired
+            if not href:  # the lookup reads English alt text; another language lands here
+                raise RuntimeError(
+                    "could not find your username on the home page; "
+                    'set username = "<your handle>" in unwatched.toml'
+                )
             username = href.strip("/").split("/")[0]
         base = f"https://www.instagram.com/{username}/saved/"
         out += _found(_grid(page, base + "all-posts/", known, full, 20, wait_ms), "saved", "saved")
