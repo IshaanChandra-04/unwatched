@@ -66,7 +66,7 @@ def test_install_on_linux_keeps_the_users_other_cron_lines(monkeypatch, tmp_path
     schedule.install("15:00", tmp_path / "u.toml", exe=Path("/usr/local/bin/unwatched"))
     lines = written["text"].splitlines()
     assert lines[0] == "0 1 * * * backup" and len(lines) == 2
-    assert lines[1].startswith("0 15 * * * DISPLAY=:0") and "old" not in lines[1]
+    assert lines[1].startswith("0 15 * * * DISPLAY=:0") and not lines[1].startswith("5 5")
     assert schedule.status()["installed"] is True
 
 

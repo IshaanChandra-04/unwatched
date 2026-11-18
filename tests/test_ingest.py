@@ -26,7 +26,7 @@ def test_ingest_export_folder_finds_every_source():
     by_code = {}
     for code, src, _ in found:
         by_code.setdefault(code, []).append(src["kind"])
-    assert by_code["AAAAAAAAAAA"] == ["saved", "dm"]
+    assert sorted(by_code["AAAAAAAAAAA"]) == ["dm", "saved"]
     assert by_code["BBBBBBBBBBB"] == ["saved"]
     assert by_code["CCCCCCCCCCC"] == ["liked"]
     assert by_code["DDDDDDDDDDD"] == ["dm"]

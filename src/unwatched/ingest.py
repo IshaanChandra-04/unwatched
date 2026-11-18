@@ -32,7 +32,7 @@ def iso_from_epoch(value: int | float, unit: str) -> str:
 
 def iter_export_files(path: Path) -> Iterator[tuple[str, bytes]]:
     if path.is_dir():
-        for p in path.rglob("*.json"):
+        for p in sorted(path.rglob("*.json")):  # the same order on every system
             yield p.relative_to(path).as_posix(), p.read_bytes()
         return
     with zipfile.ZipFile(path) as z:
