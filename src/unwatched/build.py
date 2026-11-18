@@ -17,6 +17,12 @@ def load_transcript(work: Path, code: str) -> str | None:
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
 
 
+def load_screen(work: Path, code: str) -> str | None:
+    """The on-screen report `describe` wrote for the post's frames or slides."""
+    path = work / "frames" / f"{code}.md"
+    return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+
 def _quote(text: str) -> str:
     """Mark every line, so text written by strangers reads as data, not as instructions."""
     return "\n".join(f"> {line}" for line in text.splitlines())
@@ -70,6 +76,7 @@ def render(
     transcripts: dict[str, str | None],
     codes: list[str],
     generated: str,
+    screens: dict[str, str | None] | None = None,
 ) -> str:
     lines = [
         "# unwatched digest input",
@@ -101,14 +108,17 @@ def render(
             "",
         ]
         transcript = transcripts.get(code)
+        screen = (screens or {}).get(code)
         if transcript:
             lines += ["Transcript:", "", _quote(transcript)]
         elif transcript == "" and meta.get("media_type") == "video":
             lines.append("_video, no speech detected_")
         elif meta.get("media_type") == "video":
             lines.append("_video, not transcribed yet_")
-        else:
+        elif not screen:
             lines.append("_image post, no transcript_")
+        if screen:
+            lines += ["", "On screen:", "", _quote(screen)]
     return "\n".join(lines) + "\n"
 
 
@@ -123,6 +133,8 @@ def run_build(work: Path, out: Path, new_only: bool, max_posts: int | None = Non
         codes = sorted(posts, key=lambda c: posts[c]["first_seen"])
     metas = {c: load_meta(work, c) for c in codes}
     transcripts = {c: load_transcript(work, c) for c in codes}
+    screens = {c: load_screen(work, c) for c in codes}
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(render(posts, metas, transcripts, codes, now_iso()), encoding="utf-8")
+    text = render(posts, metas, transcripts, codes, now_iso(), screens)
+    out.write_text(text, encoding="utf-8")
     return codes
