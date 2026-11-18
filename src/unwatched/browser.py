@@ -72,8 +72,10 @@ _COLLECTIONS_JS = """
   .filter(a => /\\/saved\\/[^/]+\\/\\d+\\/?$/.test(a.href) && a.innerText.trim())
   .map(a => [a.href, a.innerText.trim().split('\\n')[0]])
 """
-# A post page: the slides are the large images in the article (the avatar is small), srcset
-# names the sizes, and the carousel advances with its Next button. The caption is the heading.
+# A post page (checked 2026-11-17): no <article>; the slides are the large images in <main> that
+# are not inside a link (the "more posts" grid is links, the avatar is small); srcset names the
+# sizes; the carousel advances with its Next button; the caption is in the og:title meta as
+# '@user on Instagram: "..."' (there is no heading).
 _POST_JS = """
 () => {
   const abs = (u) => new URL(u, location.href).href;
@@ -83,11 +85,16 @@ _POST_JS = """
       .map(([u, w]) => [u, parseInt(w) || 0]).sort((a, b) => b[1] - a[1]);
     return abs(cands[0][0]);
   };
-  const imgs = [...document.querySelectorAll('article img')]
-    .filter(i => i.getBoundingClientRect().width > 200);
-  const h1 = document.querySelector('article h1') || document.querySelector('h1');
+  const imgs = [...document.querySelectorAll('main img')]
+    .filter(i => i.getBoundingClientRect().width > 200 && !i.closest('a'));
+  const og = document.querySelector('meta[property="og:title"]');
+  let caption = og ? og.content : null;
+  if (caption) {
+    const m = caption.match(/^@?\\S+ on Instagram: "([\\s\\S]*)"\\s*$/);
+    caption = m ? m[1] : caption;
+  }
   return {srcs: imgs.map(pick), next: !!document.querySelector('button[aria-label="Next"]'),
-          caption: h1 ? h1.innerText : null};
+          caption};
 }
 """
 
@@ -412,6 +419,9 @@ def fetch_pictures(
                 fields = {"slides": len(urls), "pictures_error": None}
                 if caption:
                     fields["caption"] = caption
+                final = next(iter(codes_from_text(page.url)), None)
+                if final and final != code:  # a slide's own code redirects to its post
+                    fields["canonical"] = final
                 update_meta(work, code, **fields)
                 counts["fetched"] += 1
                 log.info("pictures %s: %d slides", code, len(urls))
