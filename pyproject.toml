@@ -10,6 +10,7 @@ dependencies = [
     "yt-dlp>=2025.1.1",
     "faster-whisper>=1.1",
     "av<14",
+    "pillow>=10",
 ]
 
 [project.urls]
