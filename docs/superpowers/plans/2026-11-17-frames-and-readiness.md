@@ -343,7 +343,7 @@ def test_doctor_exit_code_follows_the_checks(
 
 ## Changes after the baseline audit (2026-11-17)
 
-A report-only audit of the 0.1.1 tree (ledger: `.superpowers/sdd/2026-11-17-frames-and-readiness/audit.md`) added these to the tasks above, in the task that owns the code:
+A report-only audit of the 0.1.1 tree (run in the build session, findings summarised here) added these to the tasks above, in the task that owns the code:
 
 - Task 2: `_run` gets `timeout=300` and a `TimeoutExpired` is recorded like any fetch failure (one stalled download must not hold the run).
 - Task 6: the config loader rejects unknown keys and wrong types (`sources.dm` must be a list, ...) with a `ValueError` that `cmd_run` prints; `digest = true` without `profile` and `master` is reported in the summary instead of "skipped"; the four profiles ship inside the wheel and `profile = "tech"` resolves to the packaged one; `main()` configures INFO logging so hand-run commands show progress and returns 130 on Ctrl-C.
