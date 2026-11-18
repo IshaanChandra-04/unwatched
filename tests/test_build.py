@@ -176,3 +176,17 @@ def test_due_migrates_even_when_seen_posts_were_recorded_first(tmp_path):
     assert "AAAAAAAAAAA" in state["digested"] and state["schema"] == 2
     state["digested"].pop("AAAAAAAAAAA")  # a schema-2 state is never migrated again
     assert due(tmp_path, POSTS, state) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]
+
+
+def test_due_migration_ignores_material_written_after_the_last_digest(tmp_path):
+    import os
+
+    (tmp_path / "transcripts").mkdir()
+    (tmp_path / "frames").mkdir()
+    old = tmp_path / "transcripts" / "AAAAAAAAAAA.txt"
+    old.write_text("spoken", encoding="utf-8")
+    os.utime(old, (1_700_000_000, 1_700_000_000))  # 2023: before the last digest
+    (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("new report", encoding="utf-8")  # now
+    state = {"last_digest": "2025-10-31T12:00:00Z", "digested": {}}
+    assert due(tmp_path, POSTS, state) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]
+    assert state["digested"]["AAAAAAAAAAA"] == ["caption", "transcript"]  # the report came later

@@ -1,6 +1,7 @@
 """Render the digest input: everything Claude needs about each post, in one file."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from unwatched.posts import load_posts, now_iso
@@ -50,17 +51,38 @@ def materials(work: Path, code: str, rec: dict, meta: dict) -> list[str]:
     return out
 
 
+def _existed_by(path: Path, when: float) -> bool:
+    return path.exists() and path.stat().st_mtime <= when
+
+
+def materials_before(work: Path, code: str, rec: dict, meta: dict, since: str) -> list[str]:
+    """The materials whose files already existed at ``since``, what an older digest could see."""
+    when = datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
+    out = []
+    meta_path = work / "meta" / f"{code}.json"
+    if _caption_text(rec, meta) and (not meta_path.exists() or _existed_by(meta_path, when)):
+        out.append("caption")
+    if _existed_by(work / "transcripts" / f"{code}.txt", when):
+        out.append("transcript")
+    if _existed_by(work / "frames" / f"{code}.md", when):
+        out.append("frames")
+    return out
+
+
 def due(work: Path, posts: dict[str, dict], state: dict) -> list[str]:
     """Posts the digest has not seen, or saw with less material, oldest first.
 
     A state written before 0.2 has no record per post; its posts from before the last digest
-    are recorded with what they have now, so they are not presented a second time.
+    are recorded with the material that existed at that digest (by file time), so they are
+    not presented a second time while anything written since still is.
     """
     digested = state.setdefault("digested", {})
     if state.get("schema", 1) < 2:  # a state written before the per-post record
+        since = state.get("last_digest")
         for code, rec in posts.items():
-            if state.get("last_digest") and rec["first_seen"] <= state["last_digest"]:
-                digested.setdefault(code, materials(work, code, rec, load_meta(work, code)))
+            if since and rec["first_seen"] <= since:
+                seen = materials_before(work, code, rec, load_meta(work, code), since)
+                digested.setdefault(code, seen)
         state["schema"] = 2
     codes = [
         code

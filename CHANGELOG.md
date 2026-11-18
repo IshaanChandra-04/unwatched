@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The one-time migration of a 0.1 state records, per post, only the material whose file already existed at the last digest (by file time), so transcripts and on-screen reports written by the first 0.2 run before the migration are still presented.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added
