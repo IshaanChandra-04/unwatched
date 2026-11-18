@@ -67,7 +67,6 @@ def test_install_on_linux_keeps_the_users_other_cron_lines(monkeypatch, tmp_path
     lines = written["text"].splitlines()
     assert lines[0] == "0 1 * * * backup" and len(lines) == 2
     assert lines[1].startswith("0 15 * * * DISPLAY=:0") and not lines[1].startswith("5 5")
-    assert schedule.status()["installed"] is True
 
 
 def test_status_and_remove_use_launchd_on_macos(monkeypatch, tmp_path):

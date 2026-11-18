@@ -97,7 +97,11 @@ def test_materials_lists_what_exists(tmp_path):
 
 
 def test_due_lists_new_posts_and_posts_with_new_material(tmp_path):
-    state = {"last_digest": "2026-01-01T00:00:00Z", "digested": {"AAAAAAAAAAA": ["caption"]}}
+    state = {
+        "last_digest": "2026-01-01T00:00:00Z",
+        "digested": {"AAAAAAAAAAA": ["caption"]},
+        "schema": 2,
+    }
     assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]  # A was seen, B never
     (tmp_path / "frames").mkdir()
     (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("x", encoding="utf-8")
@@ -164,3 +168,11 @@ def test_render_escapes_a_pipe_in_the_uploader_name():
         "x",
     )
     assert "| Sarvesh Thakur \\| AI | image |" in out
+
+
+def test_due_migrates_even_when_seen_posts_were_recorded_first(tmp_path):
+    state = {"last_digest": "2025-10-31T12:00:00Z", "digested": {"ZZZZZZZZZZZ": []}}
+    assert due(tmp_path, POSTS, state) == ["BBBBBBBBBBB"]
+    assert "AAAAAAAAAAA" in state["digested"] and state["schema"] == 2
+    state["digested"].pop("AAAAAAAAAAA")  # a schema-2 state is never migrated again
+    assert due(tmp_path, POSTS, state) == ["AAAAAAAAAAA", "BBBBBBBBBBB"]

@@ -8,6 +8,7 @@ from unwatched.state import load_state
 
 FIX = Path(__file__).parent / "fixtures"
 FAKE_YTDLP = [sys.executable, str(FIX.parent / "fake_ytdlp.py")]
+FAKE_CLAUDE = [sys.executable, str(FIX.parent / "fake_claude.py")]
 
 
 def _cfg(tmp_path, **over):
@@ -176,7 +177,7 @@ def test_run_all_fetches_pictures_for_image_posts_without_slides(tmp_path, monke
     monkeypatch.setattr(
         browser_module,
         "fetch_pictures",
-        lambda work, codes: asked.extend(codes) or {"fetched": len(codes), "failed": 0},
+        lambda work, codes, **kw: asked.extend(codes) or {"fetched": len(codes), "failed": 0},
     )
     meta = tmp_path / "w" / "meta"
     meta.mkdir(parents=True)
@@ -185,3 +186,59 @@ def test_run_all_fetches_pictures_for_image_posts_without_slides(tmp_path, monke
     )
     assert run_all(_cfg(tmp_path), ytdlp=FAKE_YTDLP) == 0
     assert asked == ["EEEEEEEEEEE"]
+
+
+def test_run_all_persists_what_the_digest_recorded(tmp_path):
+    profile = tmp_path / "p.md"
+    profile.write_text("Keep: all\n", encoding="utf-8")
+    cfg = _cfg(
+        tmp_path,
+        digest=True,
+        profile=str(profile),
+        master=str(tmp_path / "m.md"),
+        claude=FAKE_CLAUDE,
+        digest_max_posts=2,
+    )
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
+    state = load_state(tmp_path / "w")
+    assert len(state["digested"]) == 2 and state["last_digest"] is not None
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
+    assert len(load_state(tmp_path / "w")["digested"]) == 4
+
+
+def test_run_all_does_not_count_top_ups_against_the_fetch_cap(tmp_path, monkeypatch):
+    import json
+
+    cfg = _cfg(tmp_path)
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0  # ingest only; nothing to fetch
+    work = tmp_path / "w"
+    (work / "meta").mkdir()
+    for code in load_posts(work):  # every post fetched before 0.2: meta but no video
+        (work / "meta" / f"{code}.json").write_text(
+            json.dumps({"code": code, "error": None, "media_type": "video"}), encoding="utf-8"
+        )
+    _trace(monkeypatch, [], "run_fetch", "run_frames", "run_transcribe")
+    cfg["fetch"] = {"kinds": ["links", "saved", "dm", "liked"], "max": 1, "delay": 0}
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
+    assert "cap" not in (load_state(work)["last_error"] or "")
+
+
+def test_run_all_continues_when_pictures_need_a_sign_in(tmp_path, monkeypatch):
+    import json
+
+    import unwatched.browser as browser_module
+
+    _trace(monkeypatch, [], "run_fetch", "run_frames", "run_transcribe")
+
+    def need_login(work, codes, **kwargs):
+        raise browser_module.LoginRequired
+
+    monkeypatch.setattr(browser_module, "fetch_pictures", need_login)
+    meta = tmp_path / "w" / "meta"
+    meta.mkdir(parents=True)
+    (meta / "EEEEEEEEEEE.json").write_text(
+        json.dumps({"code": "EEEEEEEEEEE", "error": None, "media_type": "image"}), encoding="utf-8"
+    )
+    assert run_all(_cfg(tmp_path), ytdlp=FAKE_YTDLP) == 0
+    state = load_state(tmp_path / "w")
+    assert "sign-in" in state["last_error"] and state["last_summary"].startswith("ingested")

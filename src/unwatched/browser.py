@@ -111,7 +111,11 @@ def codes_from_srcs(srcs: list[str]) -> list[str]:
 def install_chromium() -> None:
     """Download the browser Playwright drives (about 200 MB), once."""
     log.info("downloading the browser (about 200 MB, first time only)")
-    subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+    try:
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+    except subprocess.CalledProcessError as e:
+        hint = "run: python -m playwright install chromium"
+        raise RuntimeError(f"browser install failed (exit {e.returncode}); {hint}") from None
 
 
 @contextmanager
@@ -374,29 +378,37 @@ def fetch_pictures(
     headless: bool = False,
     wait_ms: int = 700,
     base_url: str = "https://www.instagram.com/p/",
+    delay: float = 3,
 ) -> dict[str, int]:
     """Download every slide and the caption of image posts through the signed-in browser."""
     counts = {"fetched": 0, "failed": 0}
     with _context(profile_dir, headless) as ctx:
         page = ctx.new_page()
-        for code in codes:
+        for n, code in enumerate(codes):
+            if n and delay:
+                time.sleep(delay)
+            folder = work / "frames" / code
+            fresh = folder.with_name(f".{code}")  # finished slides replace the cover in one move
             try:
                 page.goto(f"{base_url}{code}/")
                 _check_login(page)
                 _wait_for_content(page, _POST_JS, timeout_ms=max(1000, wait_ms * 20))
+                _check_login(page)  # a redirect after the load event
                 urls, caption = _slides(page, wait_ms)
                 if not urls:
                     raise RuntimeError("no pictures on the page")
-                folder = work / "frames" / code
-                shutil.rmtree(folder, ignore_errors=True)  # the cover yt-dlp fetched
-                folder.mkdir(parents=True)
+                shutil.rmtree(fresh, ignore_errors=True)
+                fresh.mkdir(parents=True)
                 for i, url in enumerate(urls, 1):
                     resp = ctx.request.get(url)
-                    if not resp.ok:
-                        raise RuntimeError(f"picture {i}: HTTP {resp.status}")
-                    suffix = ".webp" if "webp" in resp.headers.get("content-type", "") else ".jpg"
-                    (folder / f"{i}{suffix}").write_bytes(resp.body())
-                number_pictures(folder)
+                    kind = resp.headers.get("content-type", "")
+                    if not resp.ok or not kind.startswith("image/"):
+                        raise RuntimeError(f"picture {i}: HTTP {resp.status} {kind or 'no image'}")
+                    (fresh / f"{i}{'.webp' if 'webp' in kind else '.jpg'}").write_bytes(resp.body())
+                number_pictures(fresh)
+                shutil.rmtree(folder, ignore_errors=True)  # the cover yt-dlp fetched
+                fresh.rename(folder)
+                (work / "frames" / f"{code}.md").unlink(missing_ok=True)  # was about the cover
                 fields = {"slides": len(urls), "pictures_error": None}
                 if caption:
                     fields["caption"] = caption
@@ -406,6 +418,7 @@ def fetch_pictures(
             except LoginRequired:
                 raise
             except Exception as e:  # one post must not stop the rest
+                shutil.rmtree(fresh, ignore_errors=True)
                 tries = read_meta(work, code).get("pictures_retries", 0) + 1
                 update_meta(work, code, pictures_error=str(e)[-500:], pictures_retries=tries)
                 counts["failed"] += 1

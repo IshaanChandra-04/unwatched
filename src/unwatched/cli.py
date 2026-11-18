@@ -9,7 +9,7 @@ from pathlib import Path
 from unwatched import __version__, doctor, schedule
 from unwatched.build import run_build
 from unwatched.config import load_config
-from unwatched.describe import run_describe
+from unwatched.describe import ClaudeMissing, run_describe
 from unwatched.digest import run_digest
 from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, pictures_todo, run_fetch, select
 from unwatched.frames import run_frames
@@ -181,7 +181,11 @@ def cmd_frames(args) -> int:
 
 def cmd_describe(args) -> int:
     only = set(args.only) if args.only else None
-    counts = run_describe(args.work, args.claude, only)
+    try:
+        counts = run_describe(args.work, args.claude, only)
+    except ClaudeMissing as e:
+        print(e, file=sys.stderr)
+        return EXIT_DIGEST
     print(f"described {counts['described']} failed {counts['failed']}")
     return 0
 
@@ -236,7 +240,7 @@ def cmd_schedule(args) -> int:
         else:
             for key, value in schedule.status().items():
                 print(f"{key}: {value}")
-    except (NotImplementedError, RuntimeError) as e:
+    except (RuntimeError, FileNotFoundError) as e:  # a missing crontab or launchctl, say
         print(str(e), file=sys.stderr)
         return 1
     return 0

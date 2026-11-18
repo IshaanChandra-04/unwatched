@@ -170,6 +170,7 @@ def fetch_one(
     """
     path = work / "meta" / f"{code}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
+    prior = read_meta(work, code) if path.exists() else {}
     if url is None:  # archived post shipped inside the export
         meta = trim_meta(code, {"duration": 1}) | {"local": True, "duration": None}
     else:
@@ -185,7 +186,11 @@ def fetch_one(
                 *cookie_args,
                 url,
             )
-            meta = trim_meta(code, json.loads(result.stdout))
+            fresh = trim_meta(code, json.loads(result.stdout))
+            if fresh["caption"] is None and prior.get("caption"):
+                fresh["caption"] = prior["caption"]  # the browser read it; yt-dlp has none
+            # what the browser and describe recorded (slides, retries) outlives a re-fetch
+            meta = {k: v for k, v in prior.items() if k != "retries"} | fresh
             common = ["--no-playlist", "--no-warnings", *cookie_args, url]
             if meta["media_type"] == "video":
                 # shortcut: a carousel with several videos keeps only the first; upgrade to
@@ -218,9 +223,11 @@ def fetch_one(
                 if not pictures(work, code):
                     raise RuntimeError("no picture written")
         except (RuntimeError, OSError, json.JSONDecodeError) as e:
-            meta["error"] = str(e)[-500:]
-            prior = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-            meta["retries"] = prior.get("retries", 0) + 1
+            # a failure keeps the previous good record, with the error and the attempt count
+            meta = (prior or meta) | {
+                "error": str(e)[-500:],
+                "retries": prior.get("retries", 0) + 1,
+            }
     path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta
 

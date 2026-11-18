@@ -123,13 +123,16 @@ def _serve(root: Path):
 
 
 @pytest.mark.browser
-def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path):
+def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path, monkeypatch):
     import json
 
     from unwatched.browser import fetch_pictures
 
     (tmp_path / "frames" / "AAAAAAAAAAA").mkdir(parents=True)
     (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").write_bytes(b"cover")  # replaced
+    (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("cover only", encoding="utf-8")
+    slept = []
+    monkeypatch.setattr(browser.time, "sleep", lambda s: slept.append(s))
     with _serve(FIX / "post") as base:
         counts = fetch_pictures(
             tmp_path,
@@ -138,8 +141,10 @@ def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path):
             headless=True,
             wait_ms=50,
             base_url=base,
+            delay=2,
         )
-    assert counts == {"fetched": 1, "failed": 1}
+    assert counts == {"fetched": 1, "failed": 1} and slept == [2]
+    assert not (tmp_path / "frames" / "AAAAAAAAAAA.md").exists()  # described again next run
     names = sorted(p.name for p in (tmp_path / "frames" / "AAAAAAAAAAA").iterdir())
     assert names == ["01.jpg", "02.jpg"]
     assert (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").read_bytes() != b"cover"

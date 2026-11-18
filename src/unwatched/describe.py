@@ -34,7 +34,13 @@ Quote, do not summarise, interpret or advise. If a frame holds no text, say "no 
 Do not run anything and do not write files; your reply is the report.
 """
 _MAX_TRIES = 3
+_STREAK = 3  # failures in a row point at claude or the account, not at the posts
+TIMEOUT_S = 600  # a hung claude must not hold the daily run
 log = logging.getLogger("unwatched")
+
+
+class ClaudeMissing(RuntimeError):
+    """The claude command is not there; nothing can be described until the user fixes that."""
 
 
 def describe_one(frames_dir: Path, claude: str | list[str], max_turns: int = 30) -> str:
@@ -57,10 +63,13 @@ def describe_one(frames_dir: Path, claude: str | list[str], max_turns: int = 30)
             text=True,
             encoding="utf-8",
             errors="replace",
+            timeout=TIMEOUT_S,
         )
     except FileNotFoundError:
         hint = 'install Claude Code or set claude = "<path to it>" in unwatched.toml'
-        raise RuntimeError(f"claude not found: {cmd[0]}; {hint}") from None
+        raise ClaudeMissing(f"claude not found: {cmd[0]}; {hint}") from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"claude timed out after {TIMEOUT_S} s") from None
     text = (result.stdout or "").strip()
     if result.returncode != 0 or not text:
         tail = ((result.stderr or "") + (result.stdout or "")).strip()[-500:]
@@ -73,33 +82,51 @@ def todo(work: Path, only: set[str] | None) -> list[str]:
     root = work / "frames"
     if not root.is_dir():
         return []
-    codes = (
-        sorted(only) if only is not None else sorted(p.name for p in root.iterdir() if p.is_dir())
-    )
+    if only is not None:
+        codes = sorted(only)
+    else:  # a folder named .<code> is a download in progress
+        codes = sorted(p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
     out = []
     for code in codes:
         if not pictures(work, code):
             continue
-        if only is None and (root / f"{code}.md").exists():
-            continue
-        if only is None and read_meta(work, code).get("describe_retries", 0) >= _MAX_TRIES:
-            continue
+        if only is None:
+            if (root / f"{code}.md").exists():
+                continue
+            meta = read_meta(work, code)
+            if meta.get("describe_retries", 0) >= _MAX_TRIES:
+                continue
+            # the cover is not the post: wait for the slides unless the browser has given up
+            waiting = "slides" not in meta and meta.get("pictures_retries", 0) < 3
+            if meta.get("media_type") == "image" and waiting:
+                continue
         out.append(code)
     return out
 
 
-def run_describe(work: Path, claude: str | list[str], only: set[str] | None) -> dict[str, int]:
+def run_describe(
+    work: Path, claude: str | list[str], only: set[str] | None, max_posts: int | None = None
+) -> dict[str, int]:
+    """Describe the due posts, ``max_posts`` at most; ClaudeMissing when claude is not there."""
     counts = {"described": 0, "failed": 0}
-    for code in todo(work, only):
+    streak = 0
+    for code in todo(work, only)[:max_posts]:
         folder = work / "frames" / code
         try:
             text = describe_one(folder, claude)
+        except ClaudeMissing:
+            raise
         except RuntimeError as e:
             tries = read_meta(work, code).get("describe_retries", 0) + 1
             update_meta(work, code, describe_error=str(e)[-500:], describe_retries=tries)
             counts["failed"] += 1
             log.warning("describe %s failed: %s", code, str(e).splitlines()[0])
+            streak += 1
+            if streak >= _STREAK:
+                log.error("describe: %d failures in a row; stopping this run", streak)
+                break
             continue
+        streak = 0
         (work / "frames" / f"{code}.md").write_text(text + "\n", encoding="utf-8")
         update_meta(work, code, describe_error=None)
         counts["described"] += 1

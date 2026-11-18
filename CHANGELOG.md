@@ -29,7 +29,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- One stalled yt-dlp download no longer holds the daily run: calls time out after 300 s and the post is recorded as failed.
+- `run` overwrote the state the digest had just saved with its pre-run copy, so `last_digest` never advanced through the daily job and the same posts were offered again the next day.
+- One stalled yt-dlp download no longer holds the daily run: calls time out after 300 s and the post is recorded as failed. The `describe` run has the same guard (600 s), stops after three failures in a row, and a missing `claude` is reported once without counting against the posts.
+- A re-fetch keeps what the browser and `describe` recorded for the post (slides, caption, attempts), and a failed re-fetch keeps the previous good record.
 
 ## [0.1.1] - 2026-11-17
 

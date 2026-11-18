@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 
@@ -19,6 +20,8 @@ def main() -> int:
         Path(os.environ["FAKE_CLAUDE_ARGV"]).write_text(json.dumps(sys.argv[1:]), encoding="utf-8")
     if os.environ.get("FAKE_CLAUDE_CWD"):
         Path(os.environ["FAKE_CLAUDE_CWD"]).write_text(os.getcwd(), encoding="utf-8")
+    if os.environ.get("FAKE_CLAUDE_SLEEP"):
+        time.sleep(float(os.environ["FAKE_CLAUDE_SLEEP"]))
     if os.environ.get("FAKE_CLAUDE_SILENT") == "1":
         return 0
     prompt = sys.stdin.read()

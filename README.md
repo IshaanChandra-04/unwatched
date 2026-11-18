@@ -78,7 +78,7 @@ when it is new or has gained material (a transcript, the on-screen text), at mos
 | `unwatched build [--out FILE] [--new-only]` | Write the digest input: one file with every post's caption, transcript and on-screen text. |
 | `unwatched digest --profile FILE --master FILE [--max-posts 40]` | Run Claude Code headlessly to update your master document from the due posts. |
 | `unwatched run --config FILE` | All of the above in order, with a dated log and a one-line summary. |
-| `unwatched schedule install\|remove\|status [--at HH:MM]` | Manage the daily job (Task Scheduler, launchd or cron). |
+| `unwatched schedule install\|remove\|status [--config FILE] [--at HH:MM]` | Manage the daily job (Task Scheduler, launchd or cron). |
 | `unwatched status` | Last run, last digest, post count, and anything that needs you. |
 
 Exit codes: `3` sign-in expired (run `unwatched login`), `4` fetch cap exceeded, `5` digest
@@ -120,6 +120,10 @@ already knows, so the traffic is a few page loads. What can hold it up:
   500 MB for `small`, 1.6 GB for `large-v3-turbo`); the log says so.
 - **The task's time limit.** The Windows task stops after two hours; a very large catch-up with
   CPU transcription can hit it. The files written so far are kept and the next run continues.
+- **Upgrading from 0.1.** The first runs complete the posts you already had: the video stream and
+  the pictures are downloaded (not counted against the fetch cap), and the on-screen text is
+  written for up to `digest_max_posts` old posts per run, each a short Claude run. Set
+  `frames = false` first if you would rather not spend that.
 
 ## Profiles
 

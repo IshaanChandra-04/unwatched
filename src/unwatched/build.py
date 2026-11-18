@@ -57,10 +57,11 @@ def due(work: Path, posts: dict[str, dict], state: dict) -> list[str]:
     are recorded with what they have now, so they are not presented a second time.
     """
     digested = state.setdefault("digested", {})
-    if not digested and state.get("last_digest"):
+    if state.get("schema", 1) < 2:  # a state written before the per-post record
         for code, rec in posts.items():
-            if rec["first_seen"] <= state["last_digest"]:
-                digested[code] = materials(work, code, rec, load_meta(work, code))
+            if state.get("last_digest") and rec["first_seen"] <= state["last_digest"]:
+                digested.setdefault(code, materials(work, code, rec, load_meta(work, code)))
+        state["schema"] = 2
     codes = [
         code
         for code, rec in posts.items()

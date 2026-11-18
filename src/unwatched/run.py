@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from unwatched.build import run_build
-from unwatched.describe import run_describe
+from unwatched.describe import ClaudeMissing, run_describe
 from unwatched.digest import run_digest
 from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, pictures_todo, run_fetch, select
 from unwatched.frames import run_frames
@@ -62,9 +62,9 @@ def _collect_live(cfg: dict, work: Path) -> tuple[list, list[str]]:
 def run_all(cfg: dict, ytdlp: str | list[str] = DEFAULT_YTDLP) -> int:
     work = Path(cfg["work"])
     _setup_logging(work)
-    state = load_state(work)
 
     def finish(code: int, error: str | None, summary: str) -> int:
+        state = load_state(work)  # the stages save their own records; never overwrite them
         state.update(last_run=now_iso(), last_error=error, last_summary=summary)
         save_state(work, state)
         log.info("%s%s", summary, f"; {error}" if error else "")
@@ -100,10 +100,12 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
 
     fetch_cfg = cfg["fetch"]
     todo = pending(work, select(posts, set(fetch_cfg["kinds"]), None, None, None))
-    if len(todo) > fetch_cfg["max"]:
+    # posts fetched before 0.2 are completed (video stream, pictures) without touching the cap
+    fresh = [c for c in todo if not (work / "meta" / f"{c}.json").exists()]
+    if len(fresh) > fetch_cfg["max"]:
         errors.append(
-            f"{len(todo)} posts selected, cap is {fetch_cfg['max']}; run "
-            f"`unwatched fetch --work {work} --max {len(todo)}` to continue"
+            f"{len(fresh)} posts selected, cap is {fetch_cfg['max']}; run "
+            f"`unwatched fetch --work {work} --max {len(fresh)}` to continue"
         )
         return finish(EXIT_CAP, "; ".join(errors), f"ingested {new} new, fetch stopped at cap")
     cookies = COOKIES_PATH if COOKIES_PATH.exists() else None
@@ -118,13 +120,16 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
             from unwatched.browser import LoginRequired, fetch_pictures
 
             try:
-                fetch_pictures(work, picture_codes)
-            except LoginRequired:
-                return finish(EXIT_LOGIN, LOGIN_MESSAGE, "pictures stopped: sign-in expired")
+                fetch_pictures(work, picture_codes, delay=fetch_cfg["delay"])
+            except LoginRequired:  # an enrichment stage must not stop the chain
+                errors.append(f"pictures skipped: {LOGIN_MESSAGE}")
             except Exception as e:  # the browser is the flaky part; the rest still runs
                 log.exception("pictures failed")
                 errors.append(f"pictures failed: {type(e).__name__}: {e}")
-        sampled = run_frames(work, posts, None)["sampled"]
+        frames_counts = run_frames(work, posts, None)
+        sampled = frames_counts["sampled"]
+        if frames_counts["failed"]:
+            errors.append(f"{frames_counts['failed']} videos could not be sampled; see the log")
 
     t_cfg = cfg["transcribe"]
     language = None if t_cfg["language"] == "auto" else t_cfg["language"]
@@ -136,7 +141,11 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
         digest_on = False
     described = 0
     if cfg["frames"] and digest_on:
-        d = run_describe(work, cfg["claude"], None)
+        try:
+            d = run_describe(work, cfg["claude"], None, max_posts=cfg["digest_max_posts"])
+        except ClaudeMissing as e:
+            d = {"described": 0, "failed": 0}
+            errors.append(str(e))
         described = d["described"]
         if d["failed"]:
             errors.append(f"{d['failed']} posts could not be described; see the log")

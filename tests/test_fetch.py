@@ -212,3 +212,30 @@ def test_pictures_todo_selects_image_posts_without_slides(tmp_path):
         c: {} for c in ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD", "EEEEEEEEEEE"]
     }
     assert pictures_todo(tmp_path, posts) == ["AAAAAAAAAAA", "EEEEEEEEEEE"]
+
+
+def test_fetch_one_keeps_what_the_browser_and_describe_recorded(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", json.dumps({"uploader": "u"}))  # image, no description
+    _meta(
+        tmp_path,
+        "DZdoibdDSu2",
+        media_type="image",
+        slides=3,
+        caption="from the browser",
+        describe_retries=1,
+        retries=2,
+    )
+    (tmp_path / "frames" / "DZdoibdDSu2").mkdir(parents=True)
+    (tmp_path / "frames" / "DZdoibdDSu2" / "01.jpg").write_bytes(b"x")
+    meta = fetch_one("DZdoibdDSu2", URL_D, tmp_path, None, ytdlp=FAKE)
+    assert meta["slides"] == 3 and meta["describe_retries"] == 1
+    assert meta["caption"] == "from the browser" and meta["uploader"] == "u"
+    assert meta["error"] is None and "retries" not in meta
+
+
+def test_fetch_one_failure_keeps_the_previous_record(tmp_path, monkeypatch):
+    _meta(tmp_path, "AAAAAAAAAAA", media_type="video", caption="old caption")
+    monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
+    meta = fetch_one("AAAAAAAAAAA", URL_A, tmp_path, None, ytdlp=FAKE)
+    assert meta["media_type"] == "video" and meta["caption"] == "old caption"
+    assert meta["retries"] == 1 and "login required" in meta["error"]

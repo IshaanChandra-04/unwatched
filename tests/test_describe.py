@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from unwatched.describe import PROMPT, describe_one, run_describe
+import unwatched.describe as describe_module
+from unwatched.describe import PROMPT, ClaudeMissing, describe_one, run_describe
+from unwatched.fetch import update_meta
 
 FAKE = [sys.executable, str(Path(__file__).parent / "fake_claude.py")]
 
@@ -60,5 +62,46 @@ def test_describe_one_runs_claude_boxed_in_the_frames_folder(tmp_path, monkeypat
 
 def test_describe_one_names_a_missing_claude(tmp_path):
     folder = _frames(tmp_path, "AAAAAAAAAAA")
-    with pytest.raises(RuntimeError, match="claude not found: no-such-claude"):
+    with pytest.raises(ClaudeMissing, match="claude not found: no-such-claude"):
         describe_one(folder, "no-such-claude")
+
+
+def test_run_describe_stops_at_a_missing_claude_without_burning_retries(tmp_path):
+    _frames(tmp_path, "AAAAAAAAAAA")
+    _frames(tmp_path, "BBBBBBBBBBB")
+    with pytest.raises(ClaudeMissing):
+        run_describe(tmp_path, "no-such-claude", None)
+    assert not (tmp_path / "meta").exists()
+
+
+def test_run_describe_stops_after_three_failures_in_a_row(tmp_path, monkeypatch):
+    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD", "EEEEEEEEEEE"):
+        _frames(tmp_path, code)
+    monkeypatch.setenv("FAKE_CLAUDE_DESCRIBE_FAIL", "1")
+    assert run_describe(tmp_path, FAKE, None) == {"described": 0, "failed": 3}
+    assert not (tmp_path / "meta" / "EEEEEEEEEEE.json").exists()
+
+
+def test_run_describe_caps_the_posts_per_run(tmp_path):
+    for code in ("AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC"):
+        _frames(tmp_path, code)
+    assert run_describe(tmp_path, FAKE, None, max_posts=2) == {"described": 2, "failed": 0}
+    assert run_describe(tmp_path, FAKE, None, max_posts=2) == {"described": 1, "failed": 0}
+
+
+def test_run_describe_waits_for_an_image_posts_slides(tmp_path):
+    _frames(tmp_path, "AAAAAAAAAAA", n=1)  # the cover yt-dlp fetched
+    update_meta(tmp_path, "AAAAAAAAAAA", media_type="image")
+    assert run_describe(tmp_path, FAKE, None) == {"described": 0, "failed": 0}
+    update_meta(
+        tmp_path, "AAAAAAAAAAA", pictures_retries=3
+    )  # the browser gave up: describe the cover
+    assert run_describe(tmp_path, FAKE, None) == {"described": 1, "failed": 0}
+
+
+def test_describe_one_times_out_a_hung_claude(tmp_path, monkeypatch):
+    folder = _frames(tmp_path, "AAAAAAAAAAA")
+    monkeypatch.setenv("FAKE_CLAUDE_SLEEP", "3")
+    monkeypatch.setattr(describe_module, "TIMEOUT_S", 0.3)
+    with pytest.raises(RuntimeError, match="timed out"):
+        describe_one(folder, FAKE)

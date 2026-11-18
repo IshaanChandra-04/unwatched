@@ -159,3 +159,22 @@ the seeded posts directly instead of back-dating `first_seen`. `posts.new_since`
 Exact prompt wording for `describe`; the doctor's check order and wording; launchd plist
 details; test fixtures (a generated three-scene video, a fake `claude` that writes a
 description); the CHANGELOG entries; the 0.2.0 release.
+
+## Amendment, 2026-11-17 (during the build)
+
+yt-dlp exposes only the cover picture and no caption for image posts and carousels (checked on
+two carousels), so the pictures of image posts do not come from its thumbnails after all. `fetch`
+still saves the cover as a fallback; a new `pictures` stage opens each image post in the
+signed-in browser, reads the caption, walks the carousel with its Next button (English-only,
+twenty slides at most) and downloads every slide through the page's own request context, then
+removes any `frames/<code>.md` written from the cover so the post is described again. It runs
+after `fetch` in the chain and as `unwatched pictures`; a sign-in that expired there is reported
+in the summary and does not stop the chain. `describe` waits for an image post's slides unless
+the browser has given up on it three times. The skill's step 8 therefore sends Claude to
+`unwatched pictures` and `unwatched describe`, not to Instagram.
+
+Also settled while building: `run` must reload the state before writing its summary, because the
+digest saves the per-post record on its own; posts fetched before 0.2 are completed without
+counting against the fetch cap; `describe` runs for at most `digest_max_posts` posts per run,
+times out after 600 s per post, stops after three failures in a row, and reports a missing
+`claude` once instead of counting it against every post.
