@@ -6,7 +6,7 @@ import re
 import sys
 from pathlib import Path
 
-from unwatched import __version__, schedule
+from unwatched import __version__, doctor, schedule
 from unwatched.build import run_build
 from unwatched.config import load_config
 from unwatched.describe import run_describe
@@ -32,6 +32,7 @@ _HELP = {
     "run": "run the whole daily chain from a config file",
     "schedule": "install, remove or inspect the daily task",
     "login": "sign in to Instagram once in the tool's own browser window",
+    "doctor": "check this machine for everything unwatched needs",
 }
 
 
@@ -85,6 +86,7 @@ def _parser() -> argparse.ArgumentParser:
     schedule.add_argument("action", choices=["install", "remove", "status"])
     schedule.add_argument("--at", default="15:00", help="daily time, HH:MM (default 15:00)")
     schedule.add_argument("--config", type=Path, help="config file the task runs with")
+    subs["doctor"].add_argument("--config", type=Path, help="also check this unwatched.toml")
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -240,6 +242,20 @@ def cmd_schedule(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    cfg = None
+    if args.config:
+        try:
+            cfg = load_config(args.config)
+        except (OSError, ValueError) as e:
+            print(f"cannot read {args.config}: {e}", file=sys.stderr)
+            return 2
+    results = doctor.checks(cfg)
+    for name, ok, detail in results:
+        print(f"{'ok ' if ok else 'fix'}  {name}: {detail}")
+    return 0 if all(ok for _, ok, _ in results) else 1
+
+
 def cmd_run(args) -> int:
     try:
         cfg = load_config(args.config)
@@ -262,6 +278,7 @@ _COMMANDS = {
     "digest": cmd_digest,
     "schedule": cmd_schedule,
     "run": cmd_run,
+    "doctor": cmd_doctor,
 }
 
 
