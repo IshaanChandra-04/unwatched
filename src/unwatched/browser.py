@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from unwatched.fetch import COOKIES_PATH, number_pictures, update_meta
+from unwatched.fetch import COOKIES_PATH, number_pictures, read_meta, update_meta
 from unwatched.posts import now_iso
 from unwatched.shortcode import codes_from_text, shortcode_from_cache_key
 
@@ -378,7 +378,7 @@ def fetch_pictures(
             except LoginRequired:
                 raise
             except Exception as e:  # one post must not stop the rest
-                tries = update_meta(work, code).get("pictures_retries", 0) + 1
+                tries = read_meta(work, code).get("pictures_retries", 0) + 1
                 update_meta(work, code, pictures_error=str(e)[-500:], pictures_retries=tries)
                 counts["failed"] += 1
                 log.warning("pictures %s failed: %s", code, e)

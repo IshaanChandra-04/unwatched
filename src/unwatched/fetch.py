@@ -63,12 +63,16 @@ def _missing_media(work: Path, code: str, meta: dict) -> bool:
     return False
 
 
+def read_meta(work: Path, code: str) -> dict:
+    path = work / "meta" / f"{code}.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"code": code}
+
+
 def update_meta(work: Path, code: str, **fields) -> dict:
     """Merge ``fields`` into ``meta/<code>.json`` (created if missing) and return the record."""
     path = work / "meta" / f"{code}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    meta = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"code": code}
-    meta.update(fields)
+    meta = read_meta(work, code) | fields
     path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return meta
 
