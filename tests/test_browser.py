@@ -151,8 +151,10 @@ def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path):
 
 def test_sweep_gives_up_after_the_round_cap():
     class EndlessPage:
+        url = "https://www.instagram.com/direct/t/1/"
+
         def evaluate(self, js, *args):
-            return {"hrefs": [], "end": False}
+            return {"srcs": ["https://cdn/x.jpg"], "hrefs": [], "end": False}  # never ends
 
         def wait_for_timeout(self, ms):
             pass

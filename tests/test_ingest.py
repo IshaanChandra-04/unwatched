@@ -101,5 +101,5 @@ def test_ingest_export_skips_a_file_it_cannot_parse(tmp_path, caplog):
         '{"ig_archived_post_media": [{"media": [{"no": "timestamp"}]}]}', encoding="utf-8"
     )
     found = ingest_export(export)
-    assert len(found) == 4  # saved 2 + dm 2; the archived post is gone, nothing else is
+    assert len(found) == 5  # saved 2, dm 2, liked 1; only the archived post is gone
     assert "archived_posts.json" in caplog.text and "skipped" in caplog.text
