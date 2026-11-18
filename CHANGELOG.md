@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
 ### Added
 
 - `pictures`: the slides and the caption of image posts and carousels, fetched through the signed-in browser (yt-dlp exposes only the cover picture and no caption for them).
