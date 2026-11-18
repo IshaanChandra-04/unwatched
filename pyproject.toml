@@ -30,6 +30,7 @@ packages = ["src/unwatched"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "skills/unwatched/SKILL.md" = "unwatched/skill/SKILL.md"
+"profiles" = "unwatched/profiles"
 
 [dependency-groups]
 dev = [

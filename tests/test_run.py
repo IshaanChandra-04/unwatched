@@ -17,7 +17,9 @@ def _cfg(tmp_path, **over):
         "master": None,
         "digest": False,
         "digest_max_turns": 60,
+        "digest_max_posts": 40,
         "claude": "claude",
+        "frames": True,
         "username": None,
         "sources": {
             "dm": [],
@@ -97,7 +99,7 @@ def test_run_all_keeps_dm_posts_when_the_saved_sweep_fails(tmp_path, monkeypatch
 def test_run_all_passes_the_configured_claude_to_the_digest(tmp_path, monkeypatch):
     seen = {}
 
-    def fake_digest(work, profile, master, claude, max_turns):
+    def fake_digest(work, profile, master, claude, max_turns, max_posts=40):
         seen["claude"] = claude
         return True, "digest kept=0 total=0"
 
@@ -105,3 +107,81 @@ def test_run_all_passes_the_configured_claude_to_the_digest(tmp_path, monkeypatc
     cfg = _cfg(tmp_path, digest=True, profile="p.md", master="m.md", claude="C:/tools/claude.exe")
     assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
     assert seen["claude"] == "C:/tools/claude.exe"
+
+
+def _trace(monkeypatch, order, *names):
+    import unwatched.run as run_module
+
+    for name in names:
+
+        def record(*args, _name=name, **kwargs):
+            order.append(_name)
+            if _name == "run_digest":
+                return True, "digest kept=1 total=1"
+            return {
+                "run_fetch": {"fetched": 0, "failed": 0},
+                "run_frames": {"sampled": 0, "failed": 0},
+                "run_describe": {"described": 0, "failed": 0},
+            }.get(_name, 0)
+
+        monkeypatch.setattr(run_module, name, record)
+
+
+def test_run_all_samples_and_describes_between_fetch_and_digest(tmp_path, monkeypatch):
+    order = []
+    _trace(
+        monkeypatch,
+        order,
+        "run_fetch",
+        "run_frames",
+        "run_transcribe",
+        "run_describe",
+        "run_digest",
+    )
+    profile = tmp_path / "p.md"
+    profile.write_text("Keep: all\n", encoding="utf-8")
+    cfg = _cfg(tmp_path, digest=True, profile=str(profile), master=str(tmp_path / "m.md"))
+    assert run_all(cfg, ytdlp=FAKE_YTDLP) == 0
+    assert order == ["run_fetch", "run_frames", "run_transcribe", "run_describe", "run_digest"]
+
+
+def test_run_all_skips_describe_without_the_digest(tmp_path, monkeypatch):
+    order = []
+    _trace(
+        monkeypatch,
+        order,
+        "run_fetch",
+        "run_frames",
+        "run_transcribe",
+        "run_describe",
+        "run_digest",
+    )
+    assert run_all(_cfg(tmp_path), ytdlp=FAKE_YTDLP) == 0
+    assert order == ["run_fetch", "run_frames", "run_transcribe"]
+
+
+def test_run_all_reports_a_digest_that_lacks_profile_or_master(tmp_path, monkeypatch):
+    _trace(monkeypatch, [], "run_fetch", "run_frames", "run_transcribe", "run_describe")
+    assert run_all(_cfg(tmp_path, digest=True), ytdlp=FAKE_YTDLP) == 0
+    assert "profile and master" in load_state(tmp_path / "w")["last_error"]
+
+
+def test_run_all_fetches_pictures_for_image_posts_without_slides(tmp_path, monkeypatch):
+    import json
+
+    import unwatched.browser as browser_module
+
+    _trace(monkeypatch, [], "run_fetch", "run_frames", "run_transcribe")
+    asked = []
+    monkeypatch.setattr(
+        browser_module,
+        "fetch_pictures",
+        lambda work, codes: asked.extend(codes) or {"fetched": len(codes), "failed": 0},
+    )
+    meta = tmp_path / "w" / "meta"
+    meta.mkdir(parents=True)
+    (meta / "EEEEEEEEEEE.json").write_text(
+        json.dumps({"code": "EEEEEEEEEEE", "error": None, "media_type": "image"}), encoding="utf-8"
+    )
+    assert run_all(_cfg(tmp_path), ytdlp=FAKE_YTDLP) == 0
+    assert asked == ["EEEEEEEEEEE"]
