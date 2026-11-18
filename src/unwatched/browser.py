@@ -2,12 +2,15 @@
 
 import logging
 import re
+import shutil
+import subprocess
+import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from unwatched.fetch import COOKIES_PATH
+from unwatched.fetch import COOKIES_PATH, number_pictures, read_meta, update_meta
 from unwatched.posts import now_iso
 from unwatched.shortcode import codes_from_text, shortcode_from_cache_key
 
@@ -69,6 +72,31 @@ _COLLECTIONS_JS = """
   .filter(a => /\\/saved\\/[^/]+\\/\\d+\\/?$/.test(a.href) && a.innerText.trim())
   .map(a => [a.href, a.innerText.trim().split('\\n')[0]])
 """
+# A post page (checked 2026-11-17): no <article>; the slides are the large images in <main> that
+# are not inside a link (the "more posts" grid is links, the avatar is small); srcset names the
+# sizes; the carousel advances with its Next button; the caption is in the og:title meta as
+# '@user on Instagram: "..."' (there is no heading).
+_POST_JS = """
+() => {
+  const abs = (u) => new URL(u, location.href).href;
+  const pick = (img) => {
+    if (!img.srcset) return abs(img.currentSrc || img.src);
+    const cands = img.srcset.split(',').map(s => s.trim().split(/\\s+/))
+      .map(([u, w]) => [u, parseInt(w) || 0]).sort((a, b) => b[1] - a[1]);
+    return abs(cands[0][0]);
+  };
+  const imgs = [...document.querySelectorAll('main img')]
+    .filter(i => i.getBoundingClientRect().width > 200 && !i.closest('a'));
+  const og = document.querySelector('meta[property="og:title"]');
+  let caption = og ? og.content : null;
+  if (caption) {
+    const m = caption.match(/^@?\\S+ on Instagram: "([\\s\\S]*)"\\s*$/);
+    caption = m ? m[1] : caption;
+  }
+  return {srcs: imgs.map(pick), next: !!document.querySelector('button[aria-label="Next"]'),
+          caption};
+}
+"""
 
 Found = tuple[str, dict, None]
 
@@ -87,9 +115,19 @@ def codes_from_srcs(srcs: list[str]) -> list[str]:
     return list(dict.fromkeys(codes))
 
 
+def install_chromium() -> None:
+    """Download the browser Playwright drives (about 200 MB), once."""
+    log.info("downloading the browser (about 200 MB, first time only)")
+    try:
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+    except subprocess.CalledProcessError as e:
+        hint = "run: python -m playwright install chromium"
+        raise RuntimeError(f"browser install failed (exit {e.returncode}); {hint}") from None
+
+
 @contextmanager
 def _context(profile_dir: Path, headless: bool):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import Error, sync_playwright
 
     profile_dir.mkdir(parents=True, exist_ok=True)
     for d in (profile_dir.parent, profile_dir):
@@ -98,9 +136,19 @@ def _context(profile_dir: Path, headless: bool):
         except OSError:
             pass
     with sync_playwright() as p:
-        ctx = p.chromium.launch_persistent_context(
-            str(profile_dir), headless=headless, viewport={"width": 1280, "height": 900}
-        )
+
+        def launch():
+            return p.chromium.launch_persistent_context(
+                str(profile_dir), headless=headless, viewport={"width": 1280, "height": 900}
+            )
+
+        try:
+            ctx = launch()
+        except Error as e:
+            if "Executable doesn't exist" not in str(e):
+                raise
+            install_chromium()
+            ctx = launch()
         try:
             yield ctx
         finally:
@@ -185,16 +233,19 @@ def _sweep(
     full: bool,
     stop_after_known: int,
     wait_ms: int,
+    max_rounds: int = 3000,
 ) -> list[str]:
-    """Scroll toward older items collecting codes until the streak or the end says stop."""
+    """Scroll toward older items collecting codes until the streak or the end says stop.
+
+    ``max_rounds`` (about 35 minutes at the default pace) is the guard against a layout change
+    that hides the end of the list: the sweep then returns what it has instead of running on.
+    """
     _wait_for_content(page, collect_js)
     collected: list[str] = []
     seen: set[str] = set()
     streak = 0
     idle_at_end = 0
-    rounds = 0
-    while True:
-        rounds += 1
+    for rounds in range(1, max_rounds + 1):
         if rounds % 20 == 0:
             log.info("sweep: %d rounds, %d new so far", rounds, len(collected))
         state = page.evaluate(collect_js)
@@ -221,6 +272,10 @@ def _sweep(
             idle_at_end = 0
         page.evaluate(scroll_js, 450 if "srcs" in state else 900)
         page.wait_for_timeout(wait_ms)
+    log.warning(
+        "sweep stopped after %d rounds without reaching the end; layout change?", max_rounds
+    )
+    return collected
 
 
 def _found(codes: list[str], kind: str, name: str) -> list[Found]:
@@ -290,8 +345,11 @@ def sweep_saved(
             _check_login(page)
             page.wait_for_timeout(wait_ms)
             href = page.evaluate(_PROFILE_LINK_JS)
-            if not href:
-                raise LoginRequired
+            if not href:  # the lookup reads English alt text; another language lands here
+                raise RuntimeError(
+                    "could not find your username on the home page; "
+                    'set username = "<your handle>" in unwatched.toml'
+                )
             username = href.strip("/").split("/")[0]
         base = f"https://www.instagram.com/{username}/saved/"
         out += _found(_grid(page, base + "all-posts/", known, full, 20, wait_ms), "saved", "saved")
@@ -303,3 +361,76 @@ def sweep_saved(
             out += _found(_grid(page, href, already, full, 20, wait_ms), "saved", name)
     log.info("saved sweep found %d new", len(out))
     return out
+
+
+def _slides(page, wait_ms: int) -> tuple[list[str], str | None]:
+    """Walk a post's carousel with its Next button, collecting the largest URL of every slide."""
+    urls: list[str] = []
+    caption = None
+    for _ in range(20):  # shortcut: Instagram allows 20 slides and the button is English-only
+        state = page.evaluate(_POST_JS)
+        caption = caption or state["caption"]
+        urls += [u for u in state["srcs"] if u not in urls]
+        if not state["next"]:
+            break
+        page.click('button[aria-label="Next"]')
+        page.wait_for_timeout(wait_ms)
+    return urls, caption
+
+
+def fetch_pictures(
+    work: Path,
+    codes: list[str],
+    profile_dir: Path = PROFILE_DIR,
+    headless: bool = False,
+    wait_ms: int = 700,
+    base_url: str = "https://www.instagram.com/p/",
+    delay: float = 3,
+) -> dict[str, int]:
+    """Download every slide and the caption of image posts through the signed-in browser."""
+    counts = {"fetched": 0, "failed": 0}
+    with _context(profile_dir, headless) as ctx:
+        page = ctx.new_page()
+        for n, code in enumerate(codes):
+            if n and delay:
+                time.sleep(delay)
+            folder = work / "frames" / code
+            fresh = folder.with_name(f".{code}")  # finished slides replace the cover in one move
+            try:
+                page.goto(f"{base_url}{code}/")
+                _check_login(page)
+                _wait_for_content(page, _POST_JS, timeout_ms=max(1000, wait_ms * 20))
+                _check_login(page)  # a redirect after the load event
+                urls, caption = _slides(page, wait_ms)
+                if not urls:
+                    raise RuntimeError("no pictures on the page")
+                shutil.rmtree(fresh, ignore_errors=True)
+                fresh.mkdir(parents=True)
+                for i, url in enumerate(urls, 1):
+                    resp = ctx.request.get(url)
+                    kind = resp.headers.get("content-type", "")
+                    if not resp.ok or not kind.startswith("image/"):
+                        raise RuntimeError(f"picture {i}: HTTP {resp.status} {kind or 'no image'}")
+                    (fresh / f"{i}{'.webp' if 'webp' in kind else '.jpg'}").write_bytes(resp.body())
+                number_pictures(fresh)
+                shutil.rmtree(folder, ignore_errors=True)  # the cover yt-dlp fetched
+                fresh.rename(folder)
+                (work / "frames" / f"{code}.md").unlink(missing_ok=True)  # was about the cover
+                fields = {"slides": len(urls), "pictures_error": None}
+                if caption:
+                    fields["caption"] = caption
+                final = next(iter(codes_from_text(page.url)), None)
+                if final and final != code:  # a slide's own code redirects to its post
+                    fields["canonical"] = final
+                update_meta(work, code, **fields)
+                counts["fetched"] += 1
+                log.info("pictures %s: %d slides", code, len(urls))
+            except LoginRequired:
+                raise
+            except Exception as e:  # one post must not stop the rest
+                shutil.rmtree(fresh, ignore_errors=True)
+                tries = read_meta(work, code).get("pictures_retries", 0) + 1
+                update_meta(work, code, pictures_error=str(e)[-500:], pictures_retries=tries)
+                counts["failed"] += 1
+                log.warning("pictures %s failed: %s", code, e)
+    return counts

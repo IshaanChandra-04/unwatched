@@ -50,7 +50,7 @@ def test_sweep_dm_full_collects_everything(tmp_path):
     found = sweep_dm(url, set(), profile_dir=tmp_path, full=True, headless=True, wait_ms=50)
     assert [c for c, _, _ in found] == ALL
     assert found[0][1]["kind"] == "dm" and found[0][1]["via"] == "live"
-    assert found[0][1]["name"] == "kungfookah"
+    assert found[0][1]["name"] == "alt_account"
 
 
 @pytest.mark.browser
@@ -58,7 +58,7 @@ def test_sweep_dm_waits_for_content_that_loads_late(tmp_path):
     url = (FIX / "dm_thread_delayed.html").resolve().as_uri()
     found = sweep_dm(url, set(), profile_dir=tmp_path, full=True, headless=True, wait_ms=50)
     assert [c for c, _, _ in found] == ALL
-    assert found[0][1]["name"] == "kungfookah"  # read after the list exists, not from the sidebar
+    assert found[0][1]["name"] == "alt_account"  # read after the list exists, not from the sidebar
 
 
 @pytest.mark.browser
@@ -105,3 +105,66 @@ def test_login_needs_a_session_cookie_on_a_page_that_is_not_blocked(tmp_path, mo
     assert login(profile_dir=tmp_path, timeout_s=0.01) is False
     Page.url = "https://www.instagram.com/"
     assert login(profile_dir=tmp_path, timeout_s=0.01) is True
+
+
+@contextmanager
+def _serve(root: Path):
+    import threading
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    handler = partial(SimpleHTTPRequestHandler, directory=str(root))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/"
+    finally:
+        server.shutdown()
+
+
+@pytest.mark.browser
+def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path, monkeypatch):
+    import json
+
+    from unwatched.browser import fetch_pictures
+
+    (tmp_path / "frames" / "AAAAAAAAAAA").mkdir(parents=True)
+    (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").write_bytes(b"cover")  # replaced
+    (tmp_path / "frames" / "AAAAAAAAAAA.md").write_text("cover only", encoding="utf-8")
+    slept = []
+    monkeypatch.setattr(browser.time, "sleep", lambda s: slept.append(s))
+    with _serve(FIX / "post") as base:
+        counts = fetch_pictures(
+            tmp_path,
+            ["AAAAAAAAAAA", "BBBBBBBBBBB"],
+            profile_dir=tmp_path / "profile",
+            headless=True,
+            wait_ms=50,
+            base_url=base,
+            delay=2,
+        )
+    assert counts == {"fetched": 1, "failed": 1} and slept == [2]
+    assert not (tmp_path / "frames" / "AAAAAAAAAAA.md").exists()  # described again next run
+    names = sorted(p.name for p in (tmp_path / "frames" / "AAAAAAAAAAA").iterdir())
+    assert names == ["01.jpg", "02.jpg"]
+    assert (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").read_bytes() != b"cover"
+    meta = json.loads((tmp_path / "meta" / "AAAAAAAAAAA.json").read_text(encoding="utf-8"))
+    assert meta["caption"].startswith("Top 30 skills") and meta["slides"] == 2
+    failed = json.loads((tmp_path / "meta" / "BBBBBBBBBBB.json").read_text(encoding="utf-8"))
+    assert failed["pictures_retries"] == 1 and "no pictures" in failed["pictures_error"]
+
+
+def test_sweep_gives_up_after_the_round_cap():
+    class EndlessPage:
+        url = "https://www.instagram.com/direct/t/1/"
+
+        def evaluate(self, js, *args):
+            return {"srcs": ["https://cdn/x.jpg"], "hrefs": [], "end": False}  # never ends
+
+        def wait_for_timeout(self, ms):
+            pass
+
+    from unwatched.browser import _COLLECT_JS, _SCROLL_UP_JS, _sweep
+
+    out = _sweep(EndlessPage(), _COLLECT_JS, _SCROLL_UP_JS, set(), True, 20, 0, max_rounds=5)
+    assert out == []

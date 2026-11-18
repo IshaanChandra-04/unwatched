@@ -1,0 +1,39 @@
+name: Bug report
+description: Something did not work. The doctor output and the log line say most of it.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: unwatched version and system
+      description: Output of `unwatched --version`, plus Windows, macOS or Linux and its version.
+      placeholder: "0.2.0, Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `unwatched doctor --config <your unwatched.toml>`
+      description: Paste it as is; it holds no secrets.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What you ran and what happened
+      description: The command, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: The relevant lines from the log or from `unwatched status`
+      description: The dated file in `<work>/logs/`. Remove anything you would not want public (your thread name, for example).
+      render: text
+  - type: textarea
+    id: export
+    attributes:
+      label: For data-export problems, the list of file names in your zip
+      description: Names only, no contents.
+      render: text

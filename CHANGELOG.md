@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `pictures`: the slides and the caption of image posts and carousels, fetched through the signed-in browser (yt-dlp exposes only the cover picture and no caption for them).
+- `frames`: the frames of each video that show something new, sampled with PyAV (twelve at most, 720 px wide), plus the video-only stream in `fetch` that feeds them.
+- `describe`: headless Claude Code reads a post's pictures and writes what is on screen (text verbatim, scenes, names) to `frames/<code>.md`; `build` carries it into the digest input as an `On screen:` block.
+- The digest records which materials it saw per post (`state.json["digested"]`), re-presents a post that gained a transcript or on-screen text, and works in batches of `digest_max_posts` (default 40); the summary says how many posts are waiting.
+- `doctor`: checks Python, the dependencies, the browser, the sign-in and the config, and says what to fix.
+- `schedule` on macOS (launchd agent) and Linux (crontab line with the full path and `DISPLAY=:0`); `status` and `remove` no longer call PowerShell off Windows.
+- `unwatched login` installs Chromium itself the first time, so the install is two commands.
+- The four bundled profiles ship in the wheel; `profile = "tech"` names one.
+- Config keys `frames` and `digest_max_posts`; unknown keys and wrong types are refused with the key named.
+- CI on macOS and on Python 3.11 and 3.13; browser tests on every system; a release workflow that publishes tagged versions to PyPI through trusted publishing; a bug-report form and a code of conduct.
+
+### Changed
+
+- `fetch` skips downloads whose files exist and completes posts fetched before 0.2 (video stream, pictures) on the next run.
+- `digest = true` without `profile` and `master` is reported in the summary instead of silently skipped.
+- Hand-run commands print their progress; Ctrl-C exits 130; a bad config is printed, not raised.
+- The saved-page username lookup reports a missing username as such instead of an expired session.
+- `requires-python` is `>=3.11,<3.14` (PyAV 13 has no 3.14 wheels).
+
+### Fixed
+
+- `run` overwrote the state the digest had just saved with its pre-run copy, so `last_digest` never advanced through the daily job and the same posts were offered again the next day.
+- One stalled yt-dlp download no longer holds the daily run: calls time out after 300 s and the post is recorded as failed. The `describe` run has the same guard (600 s), stops after three failures in a row, and a missing `claude` is reported once without counting against the posts.
+- A re-fetch keeps what the browser and `describe` recorded for the post (slides, caption, attempts), and a failed re-fetch keeps the previous good record.
+
 ## [0.1.1] - 2026-11-17
 
 ### Added

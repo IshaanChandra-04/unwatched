@@ -3,11 +3,14 @@
 # folder this file is in; ~ is your home folder.
 
 work = "C:/Users/me/unwatched-work"
-profile = "C:/path/to/unwatched/profiles/tech.md"
+profile = "tech"          # a bundled profile (tech, design, cooking, fashion) or the path of your own
 master = "C:/Users/me/Documents/reels/master.md"
 digest = false            # true runs `claude -p` after each run to update the master document
 digest_max_turns = 60     # tool turns Claude gets per digest; raise if runs fail on big backlogs
+digest_max_posts = 40     # posts per digest run; the rest wait for the next run
 claude = "claude"         # Claude Code executable; give the full path if the daily job cannot find it
+frames = true             # pick frames from each video and have Claude write what is on screen;
+                          # with digest = true this costs one short Claude run per post
 
 [sources]
 dm = ["https://www.instagram.com/direct/t/<thread-id>/"]

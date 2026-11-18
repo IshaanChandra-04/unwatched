@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Instagram</title>
+<meta property="og:title" content="alt_account on Instagram: &quot;Top 30 skills you must know. Comment PLUGINS&quot;">
+</head>
+<body>
+<main>
+  <header>
+    <a href="/alt_account/"><img src="../avatar.jpg" alt="alt_account's profile picture" style="width:32px;height:32px"></a>
+  </header>
+  <ul>
+    <li style="width:600px;height:600px">
+      <img id="slide" src="../slide1.jpg" srcset="../slide1.jpg 640w, ../slide1.jpg 1080w"
+           style="width:600px;height:600px" alt="">
+    </li>
+  </ul>
+  <button aria-label="Next" onclick="go()">Next</button>
+  <section>
+    <span dir="auto">alt_account Top 30 skills you must know. Comment PLUGINS</span>
+  </section>
+  <div>
+    <a href="/p/ZZZZZZZZZZZ/"><img src="../avatar.jpg" alt="Photo by someone else" style="width:311px;height:414px"></a>
+  </div>
+</main>
+<script>
+  let i = 1;
+  function go() {
+    i += 1;
+    const img = document.getElementById('slide');
+    img.src = '../slide' + i + '.jpg';
+    img.srcset = '../slide' + i + '.jpg 1080w';
+    if (i >= 2) document.querySelector('button[aria-label="Next"]').remove();
+  }
+</script>
+</body>
+</html>

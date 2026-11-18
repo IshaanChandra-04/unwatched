@@ -1,6 +1,7 @@
 """The post store: one JSON record per shortcode in ``work/posts.jsonl``."""
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,7 +27,14 @@ def load_posts(work: Path) -> dict[str, dict]:
 def save_posts(work: Path, posts: dict[str, dict]) -> None:
     work.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(posts[code], ensure_ascii=False) for code in sorted(posts)]
-    (work / "posts.jsonl").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    write_whole(work / "posts.jsonl", "".join(f"{line}\n" for line in lines))
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Write through a temporary file and rename, so a crash never leaves half a file."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def add_source(
@@ -59,8 +67,3 @@ def add_source(
     if local_media and not rec["local_media"]:
         rec["local_media"] = local_media
     return False
-
-
-def new_since(posts: dict[str, dict], since: str | None) -> list[str]:
-    codes = [c for c, r in posts.items() if since is None or r["first_seen"] > since]
-    return sorted(codes, key=lambda c: posts[c]["first_seen"])

@@ -4,12 +4,29 @@ version = "0.1.1"
 description = "Turn the reels you saved or sent yourself into a document you will actually read."
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+# PyAV 13 (the last release faster-whisper works with) has no wheels for Python 3.14
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "IshaanChandra-04" }]
+keywords = ["instagram", "reels", "transcription", "whisper", "yt-dlp", "claude-code", "knowledge-base"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Text Processing :: Indexing",
+]
 dependencies = [
     "playwright>=1.50",
     "yt-dlp>=2025.1.1",
     "faster-whisper>=1.1",
     "av<14",
+    "pillow>=10",
 ]
 
 [project.urls]
@@ -29,6 +46,7 @@ packages = ["src/unwatched"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "skills/unwatched/SKILL.md" = "unwatched/skill/SKILL.md"
+"profiles" = "unwatched/profiles"
 
 [dependency-groups]
 dev = [

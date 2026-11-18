@@ -15,8 +15,8 @@ import tempfile
 from importlib import resources
 from pathlib import Path
 
-from unwatched.build import run_build
-from unwatched.posts import now_iso
+from unwatched.build import due, load_meta, materials, run_build
+from unwatched.posts import load_posts, now_iso
 from unwatched.state import load_state, save_state
 
 MARKER = "UNWATCHED_DIGEST_DONE"
@@ -60,11 +60,13 @@ def run_digest(
     master: Path,
     claude: str | list[str] = "claude",
     max_turns: int = 40,
+    max_posts: int = 40,
 ) -> tuple[bool, str]:
     if not profile.is_file():
         return False, f"profile not found: {profile}"
     input_path = work / "digest-input.md"
-    if run_build(work, input_path, new_only=True) == 0:
+    codes = run_build(work, input_path, new_only=True, max_posts=max_posts)
+    if not codes:
         return True, "nothing new"
     with tempfile.TemporaryDirectory(prefix="unwatched-digest-") as tmp:
         box = Path(tmp)
@@ -115,9 +117,13 @@ def run_digest(
         if master.exists():
             shutil.copy(master, master.with_name(master.name + ".bak"))
         shutil.copy(box_master, master)
-    state = load_state(work)
+    state, posts = load_state(work), load_posts(work)
+    for code in codes:
+        state["digested"][code] = materials(work, code, posts[code], load_meta(work, code))
     state["last_digest"] = now_iso()
     save_state(work, state)
     summary = f"digest kept={marker[0]} total={marker[1]}"
+    if waiting := len(due(work, posts, state)):
+        summary += f"; {waiting} more waiting, run `unwatched digest` again"
     log.info(summary)
     return True, summary

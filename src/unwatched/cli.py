@@ -1,15 +1,18 @@
 """Command line entry point."""
 
 import argparse
+import logging
 import re
 import sys
 from pathlib import Path
 
-from unwatched import __version__, schedule
+from unwatched import __version__, doctor, schedule
 from unwatched.build import run_build
 from unwatched.config import load_config
+from unwatched.describe import ClaudeMissing, run_describe
 from unwatched.digest import run_digest
-from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, run_fetch, select
+from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, pictures_todo, run_fetch, select
+from unwatched.frames import run_frames
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts
 from unwatched.run import EXIT_CAP, EXIT_DIGEST, EXIT_LOGIN, LOGIN_MESSAGE, run_all
@@ -19,13 +22,17 @@ from unwatched.transcribe import run_transcribe
 _HELP = {
     "status": "show the last run and anything that needs you",
     "ingest": "collect posts from an export, links files, or live sweeps",
-    "fetch": "download metadata and audio for new posts",
+    "fetch": "download metadata, audio and video for new posts",
+    "pictures": "download the slides of image posts through the browser",
+    "frames": "pick the frames of each video that show something new",
     "transcribe": "transcribe downloaded audio locally",
+    "describe": "have Claude write what is on screen in each post's pictures",
     "build": "write the digest input file",
     "digest": "update the master document through headless Claude",
     "run": "run the whole daily chain from a config file",
     "schedule": "install, remove or inspect the daily task",
     "login": "sign in to Instagram once in the tool's own browser window",
+    "doctor": "check this machine for everything unwatched needs",
 }
 
 
@@ -64,17 +71,22 @@ def _parser() -> argparse.ArgumentParser:
     transcribe.add_argument("--model", default="small", help="small (default) or large-v3-turbo")
     transcribe.add_argument("--language", default="en", help="language code, or auto")
     transcribe.add_argument("--only", nargs="*", metavar="CODE", help="re-run exactly these codes")
+    for name in ("pictures", "frames", "describe"):
+        subs[name].add_argument("--only", nargs="*", metavar="CODE", help="exactly these codes")
+    subs["describe"].add_argument("--claude", default="claude", help="Claude Code executable")
     digest = subs["digest"]
     digest.add_argument("--profile", type=Path, required=True, help="interest profile")
     digest.add_argument("--master", type=Path, required=True, help="master document to update")
     digest.add_argument("--claude", default="claude", help="Claude Code executable")
     digest.add_argument("--max-turns", type=int, default=40)
+    digest.add_argument("--max-posts", type=int, default=40, help="posts per digest run")
     run = subs["run"]
     run.add_argument("--config", type=Path, required=True, help="unwatched.toml")
     schedule = subs["schedule"]
     schedule.add_argument("action", choices=["install", "remove", "status"])
     schedule.add_argument("--at", default="15:00", help="daily time, HH:MM (default 15:00)")
     schedule.add_argument("--config", type=Path, help="config file the task runs with")
+    subs["doctor"].add_argument("--config", type=Path, help="also check this unwatched.toml")
     build = subs["build"]
     build.add_argument("--out", type=Path, default=None, help="default: <work>/digest-input.md")
     build.add_argument("--new-only", action="store_true", help="only posts since the last digest")
@@ -121,8 +133,8 @@ def cmd_ingest(args) -> int:
 
 def cmd_build(args) -> int:
     out = args.out or args.work / "digest-input.md"
-    n = run_build(args.work, out, args.new_only)
-    print(f"wrote {out} with {n} posts")
+    codes = run_build(args.work, out, args.new_only)
+    print(f"wrote {out} with {len(codes)} posts")
     return 0
 
 
@@ -140,6 +152,41 @@ def cmd_fetch(args) -> int:
     cookies = args.cookies or (COOKIES_PATH if COOKIES_PATH.exists() else None)
     counts = run_fetch(args.work, todo, cookies, args.delay, args.ytdlp)
     print(f"fetched {counts['fetched']} failed {counts['failed']}")
+    return 0
+
+
+def cmd_pictures(args) -> int:
+    posts = load_posts(args.work)
+    codes = sorted(args.only) if args.only else pictures_todo(args.work, posts)
+    if not codes:
+        print("nothing to fetch")
+        return 0
+    from unwatched.browser import LoginRequired, fetch_pictures
+
+    try:
+        counts = fetch_pictures(args.work, codes)
+    except LoginRequired:
+        print(LOGIN_MESSAGE, file=sys.stderr)
+        return EXIT_LOGIN
+    print(f"fetched {counts['fetched']} failed {counts['failed']}")
+    return 0
+
+
+def cmd_frames(args) -> int:
+    only = set(args.only) if args.only else None
+    counts = run_frames(args.work, load_posts(args.work), only)
+    print(f"sampled {counts['sampled']} failed {counts['failed']}")
+    return 0
+
+
+def cmd_describe(args) -> int:
+    only = set(args.only) if args.only else None
+    try:
+        counts = run_describe(args.work, args.claude, only)
+    except ClaudeMissing as e:
+        print(e, file=sys.stderr)
+        return EXIT_DIGEST
+    print(f"described {counts['described']} failed {counts['failed']}")
     return 0
 
 
@@ -164,7 +211,9 @@ def cmd_login(args) -> int:
 
 
 def cmd_digest(args) -> int:
-    ok, summary = run_digest(args.work, args.profile, args.master, args.claude, args.max_turns)
+    ok, summary = run_digest(
+        args.work, args.profile, args.master, args.claude, args.max_turns, args.max_posts
+    )
     print(summary)
     return 0 if ok else EXIT_DIGEST
 
@@ -191,14 +240,33 @@ def cmd_schedule(args) -> int:
         else:
             for key, value in schedule.status().items():
                 print(f"{key}: {value}")
-    except (NotImplementedError, RuntimeError) as e:
+    except (RuntimeError, FileNotFoundError) as e:  # a missing crontab or launchctl, say
         print(str(e), file=sys.stderr)
         return 1
     return 0
 
 
+def cmd_doctor(args) -> int:
+    cfg = None
+    if args.config:
+        try:
+            cfg = load_config(args.config)
+        except (OSError, ValueError) as e:
+            print(f"cannot read {args.config}: {e}", file=sys.stderr)
+            return 2
+    results = doctor.checks(cfg)
+    for name, ok, detail in results:
+        print(f"{'ok ' if ok else 'fix'}  {name}: {detail}")
+    return 0 if all(ok for _, ok, _ in results) else 1
+
+
 def cmd_run(args) -> int:
-    return run_all(load_config(args.config))
+    try:
+        cfg = load_config(args.config)
+    except (OSError, ValueError) as e:  # a TOML syntax error is a ValueError
+        print(f"cannot read {args.config}: {e}", file=sys.stderr)
+        return 2
+    return run_all(cfg)
 
 
 _COMMANDS = {
@@ -206,21 +274,27 @@ _COMMANDS = {
     "ingest": cmd_ingest,
     "build": cmd_build,
     "fetch": cmd_fetch,
+    "pictures": cmd_pictures,
+    "frames": cmd_frames,
     "transcribe": cmd_transcribe,
+    "describe": cmd_describe,
     "login": cmd_login,
     "digest": cmd_digest,
     "schedule": cmd_schedule,
     "run": cmd_run,
+    "doctor": cmd_doctor,
 }
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
-    handler = _COMMANDS.get(args.cmd)
-    if handler is None:
-        print(f"{args.cmd}: not implemented yet", file=sys.stderr)
-        return 1
-    return handler(args)
+    # progress for hand-run commands; `run` replaces this with its dated log file
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    try:
+        return _COMMANDS[args.cmd](args)
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

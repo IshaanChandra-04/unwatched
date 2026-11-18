@@ -2,6 +2,7 @@ import json
 import sys
 from pathlib import Path
 
+import unwatched.fetch as fetch_module
 from unwatched.fetch import DEFAULT_YTDLP, fetch_one, pending, select, trim_meta
 from unwatched.posts import add_source
 
@@ -15,7 +16,7 @@ def _src(kind, name, via, day):
 def _posts():
     p = {}
     add_source(p, "AAAAAAAAAAA", _src("saved", "saved", "export", "10-31"))
-    add_source(p, "BBBBBBBBBBB", _src("dm", "kungfookah", "live", "11-01"))
+    add_source(p, "BBBBBBBBBBB", _src("dm", "alt_account", "live", "11-01"))
     add_source(p, "CCCCCCCCCCC", _src("liked", "likes", "export", "11-02"))
     add_source(p, "DDDDDDDDDDD", _src("dm", "other", "live", "11-03"))
     return p
@@ -28,7 +29,7 @@ def test_select_by_kind_thread_since_and_only():
         "BBBBBBBBBBB",
         "DDDDDDDDDDD",
     ]
-    assert select(p, {"dm"}, {"kungfookah"}, None, None) == ["BBBBBBBBBBB"]
+    assert select(p, {"dm"}, {"alt_account"}, None, None) == ["BBBBBBBBBBB"]
     assert select(p, {"saved", "dm"}, None, "2025-11-02T00:00:00Z", None) == ["DDDDDDDDDDD"]
     assert select(p, {"saved"}, None, None, {"CCCCCCCCCCC"}) == ["CCCCCCCCCCC"]
 
@@ -115,3 +116,126 @@ def test_fetch_one_counts_failed_attempts(tmp_path, monkeypatch):
     fetch_one("BBBBBBBBBBB", url, tmp_path, None, ytdlp=FAKE)
     meta = fetch_one("BBBBBBBBBBB", url, tmp_path, None, ytdlp=FAKE)
     assert meta["retries"] == 2
+
+
+VIDEO_JSON = json.dumps({"uploader": "u", "description": "d", "duration": 10})
+IMAGE_JSON = json.dumps({"uploader": "u", "description": "d"})
+URL_A = "https://www.instagram.com/p/AAAAAAAAAAA/"
+URL_D = "https://www.instagram.com/p/DZdoibdDSu2/"
+
+
+def test_fetch_one_video_downloads_audio_and_video(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", VIDEO_JSON)
+    meta = fetch_one("AAAAAAAAAAA", URL_A, tmp_path, None, ytdlp=FAKE)
+    assert meta["error"] is None
+    assert list((tmp_path / "audio").glob("AAAAAAAAAAA.*"))
+    assert [p.name for p in (tmp_path / "video").glob("AAAAAAAAAAA.*")] == ["AAAAAAAAAAA.mp4"]
+
+
+def test_fetch_one_image_downloads_thumbnails_into_frames(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", IMAGE_JSON)
+    monkeypatch.setenv("FAKE_YTDLP_CAROUSEL", "1")
+    meta = fetch_one("DZdoibdDSu2", URL_D, tmp_path, None, ytdlp=FAKE)
+    assert meta["media_type"] == "image" and meta["error"] is None
+    names = sorted(p.name for p in (tmp_path / "frames" / "DZdoibdDSu2").iterdir())
+    assert names == ["01.jpg", "02.jpg"]
+
+
+def test_fetch_one_skips_downloads_that_already_exist(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", VIDEO_JSON)
+    monkeypatch.setenv("FAKE_YTDLP_LOG", str(tmp_path / "calls.jsonl"))
+    for folder, name in (("audio", "AAAAAAAAAAA.m4a"), ("video", "AAAAAAAAAAA.mp4")):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / name).write_bytes(b"x")
+    fetch_one("AAAAAAAAAAA", URL_A, tmp_path, None, ytdlp=FAKE)
+    calls = (tmp_path / "calls.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(calls) == 1 and "--dump-single-json" in calls[0]
+
+
+def test_fetch_one_image_thumbnail_failure_is_recorded(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", IMAGE_JSON)
+    monkeypatch.setenv("FAKE_YTDLP_FAIL_THUMBNAIL", "1")
+    meta = fetch_one("DZdoibdDSu2", URL_D, tmp_path, None, ytdlp=FAKE)
+    assert "thumbnail" in meta["error"] and meta["retries"] == 1
+
+
+def test_fetch_one_times_out_a_stalled_download(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", VIDEO_JSON)
+    monkeypatch.setenv("FAKE_YTDLP_SLEEP", "3")
+    monkeypatch.setattr(fetch_module, "TIMEOUT_S", 0.3)
+    meta = fetch_one("AAAAAAAAAAA", URL_A, tmp_path, None, ytdlp=FAKE)
+    assert "timed out" in meta["error"] and meta["retries"] == 1
+
+
+def _meta(tmp_path, code, **fields):
+    (tmp_path / "meta").mkdir(exist_ok=True)
+    (tmp_path / "meta" / f"{code}.json").write_text(
+        json.dumps({"code": code, "error": None} | fields), encoding="utf-8"
+    )
+
+
+def test_pending_includes_posts_missing_their_media(tmp_path):
+    _meta(tmp_path, "AAAAAAAAAAA", media_type="video")
+    _meta(tmp_path, "BBBBBBBBBBB", media_type="video")
+    (tmp_path / "video").mkdir()
+    (tmp_path / "video" / "BBBBBBBBBBB.mp4").write_bytes(b"x")
+    _meta(tmp_path, "CCCCCCCCCCC", media_type="image")
+    _meta(tmp_path, "DDDDDDDDDDD", media_type="image")
+    (tmp_path / "frames" / "DDDDDDDDDDD").mkdir(parents=True)
+    (tmp_path / "frames" / "DDDDDDDDDDD" / "01.jpg").write_bytes(b"x")
+    codes = ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD"]
+    assert pending(tmp_path, codes) == ["AAAAAAAAAAA", "CCCCCCCCCCC"]
+
+
+def test_number_pictures_converts_webp_covers_and_renumbers(tmp_path):
+    from PIL import Image
+
+    from unwatched.fetch import number_pictures, pictures
+
+    folder = tmp_path / "frames" / "AAAAAAAAAAA"
+    folder.mkdir(parents=True)
+    Image.new("RGB", (8, 8), "red").save(folder / "1.webp")
+    (folder / "2.jpg").write_bytes(b"x")
+    number_pictures(folder)
+    assert [p.name for p in pictures(tmp_path, "AAAAAAAAAAA")] == ["01.jpg", "02.jpg"]
+
+
+def test_pictures_todo_selects_image_posts_without_slides(tmp_path):
+    from unwatched.fetch import pictures_todo
+
+    _meta(tmp_path, "AAAAAAAAAAA", media_type="image")
+    _meta(tmp_path, "BBBBBBBBBBB", media_type="image", slides=3)
+    _meta(tmp_path, "CCCCCCCCCCC", media_type="video")
+    _meta(tmp_path, "DDDDDDDDDDD", media_type="image", pictures_retries=3)
+    _meta(tmp_path, "EEEEEEEEEEE", media_type="image", pictures_retries=2)
+    posts = {
+        c: {} for c in ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD", "EEEEEEEEEEE"]
+    }
+    assert pictures_todo(tmp_path, posts) == ["AAAAAAAAAAA", "EEEEEEEEEEE"]
+
+
+def test_fetch_one_keeps_what_the_browser_and_describe_recorded(tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_YTDLP_JSON", json.dumps({"uploader": "u"}))  # image, no description
+    _meta(
+        tmp_path,
+        "DZdoibdDSu2",
+        media_type="image",
+        slides=3,
+        caption="from the browser",
+        describe_retries=1,
+        retries=2,
+    )
+    (tmp_path / "frames" / "DZdoibdDSu2").mkdir(parents=True)
+    (tmp_path / "frames" / "DZdoibdDSu2" / "01.jpg").write_bytes(b"x")
+    meta = fetch_one("DZdoibdDSu2", URL_D, tmp_path, None, ytdlp=FAKE)
+    assert meta["slides"] == 3 and meta["describe_retries"] == 1
+    assert meta["caption"] == "from the browser" and meta["uploader"] == "u"
+    assert meta["error"] is None and "retries" not in meta
+
+
+def test_fetch_one_failure_keeps_the_previous_record(tmp_path, monkeypatch):
+    _meta(tmp_path, "AAAAAAAAAAA", media_type="video", caption="old caption")
+    monkeypatch.setenv("FAKE_YTDLP_FAIL", "1")
+    meta = fetch_one("AAAAAAAAAAA", URL_A, tmp_path, None, ytdlp=FAKE)
+    assert meta["media_type"] == "video" and meta["caption"] == "old caption"
+    assert meta["retries"] == 1 and "login required" in meta["error"]

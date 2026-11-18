@@ -1,12 +1,15 @@
-"""The daily chain: ingest, fetch, transcribe, build, digest, with a log and a one-line summary."""
+"""The daily chain: ingest, fetch, pictures, frames, transcribe, describe, build, digest, with a
+log and a one-line summary."""
 
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 from unwatched.build import run_build
+from unwatched.describe import ClaudeMissing, run_describe
 from unwatched.digest import run_digest
-from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, run_fetch, select
+from unwatched.fetch import COOKIES_PATH, DEFAULT_YTDLP, pending, pictures_todo, run_fetch, select
+from unwatched.frames import run_frames
 from unwatched.ingest import apply, ingest_export, ingest_links
 from unwatched.posts import load_posts, now_iso
 from unwatched.state import load_state, save_state
@@ -59,9 +62,9 @@ def _collect_live(cfg: dict, work: Path) -> tuple[list, list[str]]:
 def run_all(cfg: dict, ytdlp: str | list[str] = DEFAULT_YTDLP) -> int:
     work = Path(cfg["work"])
     _setup_logging(work)
-    state = load_state(work)
 
     def finish(code: int, error: str | None, summary: str) -> int:
+        state = load_state(work)  # the stages save their own records; never overwrite them
         state.update(last_run=now_iso(), last_error=error, last_summary=summary)
         save_state(work, state)
         log.info("%s%s", summary, f"; {error}" if error else "")
@@ -97,10 +100,12 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
 
     fetch_cfg = cfg["fetch"]
     todo = pending(work, select(posts, set(fetch_cfg["kinds"]), None, None, None))
-    if len(todo) > fetch_cfg["max"]:
+    # posts fetched before 0.2 are completed (video stream, pictures) without touching the cap
+    fresh = [c for c in todo if not (work / "meta" / f"{c}.json").exists()]
+    if len(fresh) > fetch_cfg["max"]:
         errors.append(
-            f"{len(todo)} posts selected, cap is {fetch_cfg['max']}; run "
-            f"`unwatched fetch --work {work} --max {len(todo)}` to continue"
+            f"{len(fresh)} posts selected, cap is {fetch_cfg['max']}; run "
+            f"`unwatched fetch --work {work} --max {len(fresh)}` to continue"
         )
         return finish(EXIT_CAP, "; ".join(errors), f"ingested {new} new, fetch stopped at cap")
     cookies = COOKIES_PATH if COOKIES_PATH.exists() else None
@@ -108,15 +113,53 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
     if todo and counts["failed"] == len(todo):
         errors.append(f"every fetch failed ({len(todo)} posts); check the log and the cookies")
 
+    posts = load_posts(work)
+    sampled = 0
+    if cfg["frames"]:
+        if picture_codes := pictures_todo(work, posts):
+            from unwatched.browser import LoginRequired, fetch_pictures
+
+            try:
+                fetch_pictures(work, picture_codes, delay=fetch_cfg["delay"])
+            except LoginRequired:  # an enrichment stage must not stop the chain
+                errors.append(f"pictures skipped: {LOGIN_MESSAGE}")
+            except Exception as e:  # the browser is the flaky part; the rest still runs
+                log.exception("pictures failed")
+                errors.append(f"pictures failed: {type(e).__name__}: {e}")
+        frames_counts = run_frames(work, posts, None)
+        sampled = frames_counts["sampled"]
+        if frames_counts["failed"]:
+            errors.append(f"{frames_counts['failed']} videos could not be sampled; see the log")
+
     t_cfg = cfg["transcribe"]
     language = None if t_cfg["language"] == "auto" else t_cfg["language"]
-    transcribed = run_transcribe(work, load_posts(work), t_cfg["model"], language, None)
+    transcribed = run_transcribe(work, posts, t_cfg["model"], language, None)
+
+    digest_on = cfg["digest"]
+    if digest_on and not (cfg["profile"] and cfg["master"]):
+        errors.append("digest = true needs profile and master in unwatched.toml")
+        digest_on = False
+    described = 0
+    if cfg["frames"] and digest_on:
+        try:
+            d = run_describe(work, cfg["claude"], None, max_posts=cfg["digest_max_posts"])
+        except ClaudeMissing as e:
+            d = {"described": 0, "failed": 0}
+            errors.append(str(e))
+        described = d["described"]
+        if d["failed"]:
+            errors.append(f"{d['failed']} posts could not be described; see the log")
     run_build(work, work / "digest-input.md", new_only=True)
 
     code, digest_result = 0, "skipped"
-    if cfg["digest"] and cfg["profile"] and cfg["master"]:
+    if digest_on:
         ok, summary = run_digest(
-            work, Path(cfg["profile"]), Path(cfg["master"]), cfg["claude"], cfg["digest_max_turns"]
+            work,
+            Path(cfg["profile"]),
+            Path(cfg["master"]),
+            cfg["claude"],
+            cfg["digest_max_turns"],
+            cfg["digest_max_posts"],
         )
         digest_result = "ok" if ok else "failed"
         if not ok:
@@ -126,5 +169,6 @@ def _chain(cfg: dict, work: Path, ytdlp, finish) -> int:
         code,
         "; ".join(errors) or None,
         f"ingested {new} new, fetched {counts['fetched']}, failed {counts['failed']}, "
-        f"transcribed {transcribed}, digest {digest_result}",
+        f"frames {sampled}, transcribed {transcribed}, described {described}, "
+        f"digest {digest_result}",
     )
