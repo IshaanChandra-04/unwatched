@@ -14,7 +14,7 @@ def test_ingest_then_status(tmp_path, capsys):
     )
     assert rc == 0
     out = capsys.readouterr().out
-    assert "dm:kungfookah: 2" in out and "links:links.md: 2" in out
+    assert "dm:alt_account: 2" in out and "links:links.md: 2" in out
     assert main(["status", "--work", str(tmp_path)]) == 0
     assert "posts: 6" in capsys.readouterr().out
 

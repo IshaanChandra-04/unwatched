@@ -89,8 +89,9 @@ def render(
     for code in codes:
         rec, meta = posts[code], metas.get(code, {})
         sources = "; ".join(f"{s['kind']}: {s['name']}" for s in rec["sources"])
+        uploader = (meta.get("uploader") or "unknown").replace("|", "\\|")
         lines.append(
-            f"| {rec['first_seen'][:10]} | {meta.get('uploader') or 'unknown'} "
+            f"| {rec['first_seen'][:10]} | {uploader} "
             f"| {meta.get('media_type') or '?'} | {rec['url'] or '(archived)'} | {sources} |"
         )
     for code in codes:

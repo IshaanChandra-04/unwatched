@@ -1,7 +1,9 @@
+from pathlib import Path
+
 from unwatched.posts import add_source, load_posts, save_posts
 
 SRC_A = {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"}
-SRC_B = {"kind": "dm", "name": "kungfookah", "via": "live", "ts": "2025-10-30T11:40:00Z"}
+SRC_B = {"kind": "dm", "name": "alt_account", "via": "live", "ts": "2025-10-30T11:40:00Z"}
 
 
 def test_add_source_creates_then_merges_and_keeps_earliest_first_seen():
@@ -23,3 +25,17 @@ def test_roundtrip_and_missing_file(tmp_path):
     save_posts(tmp_path, posts)
     assert load_posts(tmp_path) == posts
     assert (tmp_path / "posts.jsonl").read_text(encoding="utf-8").count("\n") == 1
+
+
+def test_save_posts_writes_whole_files_only(tmp_path, monkeypatch):
+    import os
+
+    posts = {}
+    add_source(posts, "BBBBBBBBBBB", SRC_A)
+    replaced = []
+    real = os.replace
+    monkeypatch.setattr(os, "replace", lambda a, b: replaced.append(Path(a).name) or real(a, b))
+    save_posts(tmp_path, posts)
+    assert replaced == ["posts.jsonl.tmp"]
+    assert [p.name for p in tmp_path.iterdir()] == ["posts.jsonl"]
+    assert load_posts(tmp_path) == posts

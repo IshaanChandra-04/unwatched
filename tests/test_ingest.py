@@ -32,7 +32,7 @@ def test_ingest_export_folder_finds_every_source():
     assert by_code["DDDDDDDDDDD"] == ["dm"]
     assert by_code["archived-1761921600"] == ["archived"]
     dm = [s for c, s, _ in found if c == "AAAAAAAAAAA" and s["kind"] == "dm"][0]
-    assert dm["name"] == "kungfookah"
+    assert dm["name"] == "alt_account"
     assert dm["text"] == "café tips"
     assert dm["ts"] == "2025-10-31T11:40:00Z"
 
@@ -77,7 +77,7 @@ def test_apply_merges_counts_and_archived_media(tmp_path):
     counts = apply(tmp_path, ingest_export(FIX))
     posts = load_posts(tmp_path)
     assert len(posts) == 5
-    assert counts["dm:kungfookah"] == 2 and counts["saved:saved"] == 2
+    assert counts["dm:alt_account"] == 2 and counts["saved:saved"] == 2
     assert posts["archived-1761921600"]["url"] is None
     assert Path(posts["archived-1761921600"]["local_media"]).name == "vid.mp4"
 
@@ -89,3 +89,17 @@ def test_apply_seen_records_seeded_posts_as_digested(tmp_path):
     state = load_state(tmp_path)
     assert "EEEEEEEEEEE" in state["digested"] and state["last_digest"] is not None
     assert due(tmp_path, load_posts(tmp_path), state) == []
+
+
+def test_ingest_export_skips_a_file_it_cannot_parse(tmp_path, caplog):
+    import shutil
+
+    export = tmp_path / "export"
+    shutil.copytree(FIX, export)
+    bad = export / "your_instagram_activity" / "content" / "archived_posts.json"
+    bad.write_text(
+        '{"ig_archived_post_media": [{"media": [{"no": "timestamp"}]}]}', encoding="utf-8"
+    )
+    found = ingest_export(export)
+    assert len(found) == 4  # saved 2 + dm 2; the archived post is gone, nothing else is
+    assert "archived_posts.json" in caplog.text and "skipped" in caplog.text

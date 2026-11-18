@@ -1,6 +1,7 @@
 """The post store: one JSON record per shortcode in ``work/posts.jsonl``."""
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,7 +27,14 @@ def load_posts(work: Path) -> dict[str, dict]:
 def save_posts(work: Path, posts: dict[str, dict]) -> None:
     work.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps(posts[code], ensure_ascii=False) for code in sorted(posts)]
-    (work / "posts.jsonl").write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    write_whole(work / "posts.jsonl", "".join(f"{line}\n" for line in lines))
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Write through a temporary file and rename, so a crash never leaves half a file."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def add_source(

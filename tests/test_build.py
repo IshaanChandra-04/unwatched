@@ -10,7 +10,7 @@ POSTS = {
         "local_media": None,
         "sources": [
             {"kind": "saved", "name": "saved", "via": "export", "ts": "2025-10-31T08:40:00Z"},
-            {"kind": "dm", "name": "kungfookah", "via": "live", "ts": None, "text": "café tips"},
+            {"kind": "dm", "name": "alt_account", "via": "live", "ts": None, "text": "café tips"},
         ],
     },
     "BBBBBBBBBBB": {
@@ -38,7 +38,7 @@ def test_render_video_with_transcript_and_image_without():
     assert "Generated 2026-11-14T15:00:00Z · 2 posts" in out
     assert (
         "| 2025-10-31 | authorA | video | https://www.instagram.com/p/AAAAAAAAAAA/ "
-        "| saved: saved; dm: kungfookah |"
+        "| saved: saved; dm: alt_account |"
     ) in out
     assert "## AAAAAAAAAAA · @authorA · 2025-10-31" in out
     assert "Caption:\n\n> Build this" in out
@@ -153,3 +153,14 @@ def test_run_build_includes_the_on_screen_report(tmp_path):
     run_build(tmp_path, tmp_path / "in.md", False)
     text = (tmp_path / "in.md").read_text(encoding="utf-8")
     assert "On screen:\n\n> ## Text on screen\n> - hi\n" in text
+
+
+def test_render_escapes_a_pipe_in_the_uploader_name():
+    out = render(
+        POSTS,
+        {"AAAAAAAAAAA": {"uploader": "Sarvesh Thakur | AI", "media_type": "image"}},
+        {"AAAAAAAAAAA": None},
+        ["AAAAAAAAAAA"],
+        "x",
+    )
+    assert "| Sarvesh Thakur \\| AI | image |" in out

@@ -16,7 +16,7 @@ def _src(kind, name, via, day):
 def _posts():
     p = {}
     add_source(p, "AAAAAAAAAAA", _src("saved", "saved", "export", "10-31"))
-    add_source(p, "BBBBBBBBBBB", _src("dm", "kungfookah", "live", "11-01"))
+    add_source(p, "BBBBBBBBBBB", _src("dm", "alt_account", "live", "11-01"))
     add_source(p, "CCCCCCCCCCC", _src("liked", "likes", "export", "11-02"))
     add_source(p, "DDDDDDDDDDD", _src("dm", "other", "live", "11-03"))
     return p
@@ -29,7 +29,7 @@ def test_select_by_kind_thread_since_and_only():
         "BBBBBBBBBBB",
         "DDDDDDDDDDD",
     ]
-    assert select(p, {"dm"}, {"kungfookah"}, None, None) == ["BBBBBBBBBBB"]
+    assert select(p, {"dm"}, {"alt_account"}, None, None) == ["BBBBBBBBBBB"]
     assert select(p, {"saved", "dm"}, None, "2025-11-02T00:00:00Z", None) == ["DDDDDDDDDDD"]
     assert select(p, {"saved"}, None, None, {"CCCCCCCCCCC"}) == ["CCCCCCCCCCC"]
 

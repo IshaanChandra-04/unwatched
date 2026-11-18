@@ -108,17 +108,20 @@ def ingest_export(path: Path) -> list[Found]:
     media_root = f"{path}/" if path.is_dir() else f"{path}!"
     out: list[Found] = []
     for name, raw in iter_export_files(path):
-        data = json.loads(raw.decode("utf-8"))
-        if name.endswith("saved_posts.json"):
-            out += parse_saved(data, "saved")
-        elif name.endswith("saved_collections.json"):
-            out += _from_hrefs(data, "saved", None)
-        elif name.endswith("liked_posts.json"):
-            out += parse_liked(data)
-        elif name.endswith("archived_posts.json"):
-            out += parse_archived(data, media_root)
-        elif _MESSAGE_FILE.search(name):
-            out += parse_messages(data)
+        try:
+            data = json.loads(raw.decode("utf-8"))
+            if name.endswith("saved_posts.json"):
+                out += parse_saved(data, "saved")
+            elif name.endswith("saved_collections.json"):
+                out += _from_hrefs(data, "saved", None)
+            elif name.endswith("liked_posts.json"):
+                out += parse_liked(data)
+            elif name.endswith("archived_posts.json"):
+                out += parse_archived(data, media_root)
+            elif _MESSAGE_FILE.search(name):
+                out += parse_messages(data)
+        except (KeyError, TypeError, ValueError) as e:  # Meta's layout is undocumented
+            log.warning("%s: skipped (%s: %s)", name, type(e).__name__, e)
     return out
 
 

@@ -36,13 +36,13 @@ cards = "\n".join(
     f'  <div class="card"><img src="{s.replace("&", "&amp;")}" alt="reel {i}"></div>'
     for i, s in zip(range(59, -1, -1), srcs, strict=True)
 )
-profile = '  <div class="profile">kungfookah · View profile</div>'
+profile = '  <div class="profile">alt_account · View profile</div>'
 
 HEAD = """<!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>kungfookah • Instagram</title>
+<title>alt_account • Instagram</title>
 <style>
   #list { height: 600px; overflow-y: auto; display: flex; flex-direction: column-reverse; }
   .card { height: 120px; flex: none; }
@@ -54,7 +54,8 @@ HEAD = """<!doctype html>
 # Like the real page: the inbox sidebar has its own headings, and the conversation column is a
 # plain section whose header names the other participant.
 MAIN = (
-    "<aside>\n<h1>my_own_handle</h1>\n<h2>Messages</h2>\n</aside>\n<section>\n<h2>kungfookah</h2>\n"
+    "<aside>\n<h1>my_own_handle</h1>\n<h2>Messages</h2>\n</aside>\n"
+    "<section>\n<h2>alt_account</h2>\n"
 )
 immediate = (
     f'{HEAD}{MAIN}<div id="list">\n{cards}\n{profile}\n</div>\n</section>\n</body>\n</html>\n'
@@ -70,7 +71,7 @@ delayed = (
     "    list.appendChild(d);\n"
     "  }\n"
     "  const p = document.createElement('div'); p.className = 'profile';\n"
-    "  p.textContent = 'kungfookah · View profile'; list.appendChild(p);\n"
+    "  p.textContent = 'alt_account · View profile'; list.appendChild(p);\n"
     "}, 1500);\n"
     "</script>\n</body>\n</html>\n"
 )

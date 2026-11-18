@@ -222,16 +222,19 @@ def _sweep(
     full: bool,
     stop_after_known: int,
     wait_ms: int,
+    max_rounds: int = 3000,
 ) -> list[str]:
-    """Scroll toward older items collecting codes until the streak or the end says stop."""
+    """Scroll toward older items collecting codes until the streak or the end says stop.
+
+    ``max_rounds`` (about 35 minutes at the default pace) is the guard against a layout change
+    that hides the end of the list: the sweep then returns what it has instead of running on.
+    """
     _wait_for_content(page, collect_js)
     collected: list[str] = []
     seen: set[str] = set()
     streak = 0
     idle_at_end = 0
-    rounds = 0
-    while True:
-        rounds += 1
+    for rounds in range(1, max_rounds + 1):
         if rounds % 20 == 0:
             log.info("sweep: %d rounds, %d new so far", rounds, len(collected))
         state = page.evaluate(collect_js)
@@ -258,6 +261,10 @@ def _sweep(
             idle_at_end = 0
         page.evaluate(scroll_js, 450 if "srcs" in state else 900)
         page.wait_for_timeout(wait_ms)
+    log.warning(
+        "sweep stopped after %d rounds without reaching the end; layout change?", max_rounds
+    )
+    return collected
 
 
 def _found(codes: list[str], kind: str, name: str) -> list[Found]:
