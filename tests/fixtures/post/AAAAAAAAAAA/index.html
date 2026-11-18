@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Post</title></head>
+<body>
+<article>
+  <header>
+    <img src="../avatar.jpg" alt="okaashish's profile picture" style="width:32px;height:32px">
+  </header>
+  <div style="width:600px;height:600px">
+    <img id="slide" src="../slide1.jpg" srcset="../slide1.jpg 640w, ../slide1.jpg 1080w"
+         style="width:600px;height:600px" alt="May be an image of text">
+  </div>
+  <button aria-label="Next" onclick="go()">Next</button>
+  <h1>Top 30 skills you must know. Comment PLUGINS</h1>
+</article>
+<script>
+  let i = 1;
+  function go() {
+    i += 1;
+    const img = document.getElementById('slide');
+    img.src = '../slide' + i + '.jpg';
+    img.srcset = '../slide' + i + '.jpg 1080w';
+    if (i >= 2) document.querySelector('button[aria-label="Next"]').remove();
+  }
+</script>
+</body>
+</html>

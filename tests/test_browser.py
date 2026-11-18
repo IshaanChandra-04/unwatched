@@ -105,3 +105,45 @@ def test_login_needs_a_session_cookie_on_a_page_that_is_not_blocked(tmp_path, mo
     assert login(profile_dir=tmp_path, timeout_s=0.01) is False
     Page.url = "https://www.instagram.com/"
     assert login(profile_dir=tmp_path, timeout_s=0.01) is True
+
+
+@contextmanager
+def _serve(root: Path):
+    import threading
+    from functools import partial
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    handler = partial(SimpleHTTPRequestHandler, directory=str(root))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/"
+    finally:
+        server.shutdown()
+
+
+@pytest.mark.browser
+def test_fetch_pictures_walks_the_carousel_and_reads_the_caption(tmp_path):
+    import json
+
+    from unwatched.browser import fetch_pictures
+
+    (tmp_path / "frames" / "AAAAAAAAAAA").mkdir(parents=True)
+    (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").write_bytes(b"cover")  # replaced
+    with _serve(FIX / "post") as base:
+        counts = fetch_pictures(
+            tmp_path,
+            ["AAAAAAAAAAA", "BBBBBBBBBBB"],
+            profile_dir=tmp_path / "profile",
+            headless=True,
+            wait_ms=50,
+            base_url=base,
+        )
+    assert counts == {"fetched": 1, "failed": 1}
+    names = sorted(p.name for p in (tmp_path / "frames" / "AAAAAAAAAAA").iterdir())
+    assert names == ["01.jpg", "02.jpg"]
+    assert (tmp_path / "frames" / "AAAAAAAAAAA" / "01.jpg").read_bytes() != b"cover"
+    meta = json.loads((tmp_path / "meta" / "AAAAAAAAAAA.json").read_text(encoding="utf-8"))
+    assert meta["caption"].startswith("Top 30 skills") and meta["slides"] == 2
+    failed = json.loads((tmp_path / "meta" / "BBBBBBBBBBB.json").read_text(encoding="utf-8"))
+    assert failed["pictures_retries"] == 1 and "no pictures" in failed["pictures_error"]

@@ -198,3 +198,17 @@ def test_number_pictures_converts_webp_covers_and_renumbers(tmp_path):
     (folder / "2.jpg").write_bytes(b"x")
     number_pictures(folder)
     assert [p.name for p in pictures(tmp_path, "AAAAAAAAAAA")] == ["01.jpg", "02.jpg"]
+
+
+def test_pictures_todo_selects_image_posts_without_slides(tmp_path):
+    from unwatched.fetch import pictures_todo
+
+    _meta(tmp_path, "AAAAAAAAAAA", media_type="image")
+    _meta(tmp_path, "BBBBBBBBBBB", media_type="image", slides=3)
+    _meta(tmp_path, "CCCCCCCCCCC", media_type="video")
+    _meta(tmp_path, "DDDDDDDDDDD", media_type="image", pictures_retries=3)
+    _meta(tmp_path, "EEEEEEEEEEE", media_type="image", pictures_retries=2)
+    posts = {
+        c: {} for c in ["AAAAAAAAAAA", "BBBBBBBBBBB", "CCCCCCCCCCC", "DDDDDDDDDDD", "EEEEEEEEEEE"]
+    }
+    assert pictures_todo(tmp_path, posts) == ["AAAAAAAAAAA", "EEEEEEEEEEE"]

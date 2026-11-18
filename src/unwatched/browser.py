@@ -2,12 +2,13 @@
 
 import logging
 import re
+import shutil
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from unwatched.fetch import COOKIES_PATH
+from unwatched.fetch import COOKIES_PATH, number_pictures, update_meta
 from unwatched.posts import now_iso
 from unwatched.shortcode import codes_from_text, shortcode_from_cache_key
 
@@ -68,6 +69,24 @@ _COLLECTIONS_JS = """
 () => [...document.querySelectorAll('a[href*="/saved/"]')]
   .filter(a => /\\/saved\\/[^/]+\\/\\d+\\/?$/.test(a.href) && a.innerText.trim())
   .map(a => [a.href, a.innerText.trim().split('\\n')[0]])
+"""
+# A post page: the slides are the large images in the article (the avatar is small), srcset
+# names the sizes, and the carousel advances with its Next button. The caption is the heading.
+_POST_JS = """
+() => {
+  const abs = (u) => new URL(u, location.href).href;
+  const pick = (img) => {
+    if (!img.srcset) return abs(img.currentSrc || img.src);
+    const cands = img.srcset.split(',').map(s => s.trim().split(/\\s+/))
+      .map(([u, w]) => [u, parseInt(w) || 0]).sort((a, b) => b[1] - a[1]);
+    return abs(cands[0][0]);
+  };
+  const imgs = [...document.querySelectorAll('article img')]
+    .filter(i => i.getBoundingClientRect().width > 200);
+  const h1 = document.querySelector('article h1') || document.querySelector('h1');
+  return {srcs: imgs.map(pick), next: !!document.querySelector('button[aria-label="Next"]'),
+          caption: h1 ? h1.innerText : null};
+}
 """
 
 Found = tuple[str, dict, None]
@@ -303,3 +322,64 @@ def sweep_saved(
             out += _found(_grid(page, href, already, full, 20, wait_ms), "saved", name)
     log.info("saved sweep found %d new", len(out))
     return out
+
+
+def _slides(page, wait_ms: int) -> tuple[list[str], str | None]:
+    """Walk a post's carousel with its Next button, collecting the largest URL of every slide."""
+    urls: list[str] = []
+    caption = None
+    for _ in range(20):  # shortcut: Instagram allows 20 slides and the button is English-only
+        state = page.evaluate(_POST_JS)
+        caption = caption or state["caption"]
+        urls += [u for u in state["srcs"] if u not in urls]
+        if not state["next"]:
+            break
+        page.click('button[aria-label="Next"]')
+        page.wait_for_timeout(wait_ms)
+    return urls, caption
+
+
+def fetch_pictures(
+    work: Path,
+    codes: list[str],
+    profile_dir: Path = PROFILE_DIR,
+    headless: bool = False,
+    wait_ms: int = 700,
+    base_url: str = "https://www.instagram.com/p/",
+) -> dict[str, int]:
+    """Download every slide and the caption of image posts through the signed-in browser."""
+    counts = {"fetched": 0, "failed": 0}
+    with _context(profile_dir, headless) as ctx:
+        page = ctx.new_page()
+        for code in codes:
+            try:
+                page.goto(f"{base_url}{code}/")
+                _check_login(page)
+                _wait_for_content(page, _POST_JS, timeout_ms=max(1000, wait_ms * 20))
+                urls, caption = _slides(page, wait_ms)
+                if not urls:
+                    raise RuntimeError("no pictures on the page")
+                folder = work / "frames" / code
+                shutil.rmtree(folder, ignore_errors=True)  # the cover yt-dlp fetched
+                folder.mkdir(parents=True)
+                for i, url in enumerate(urls, 1):
+                    resp = ctx.request.get(url)
+                    if not resp.ok:
+                        raise RuntimeError(f"picture {i}: HTTP {resp.status}")
+                    suffix = ".webp" if "webp" in resp.headers.get("content-type", "") else ".jpg"
+                    (folder / f"{i}{suffix}").write_bytes(resp.body())
+                number_pictures(folder)
+                fields = {"slides": len(urls), "pictures_error": None}
+                if caption:
+                    fields["caption"] = caption
+                update_meta(work, code, **fields)
+                counts["fetched"] += 1
+                log.info("pictures %s: %d slides", code, len(urls))
+            except LoginRequired:
+                raise
+            except Exception as e:  # one post must not stop the rest
+                tries = update_meta(work, code).get("pictures_retries", 0) + 1
+                update_meta(work, code, pictures_error=str(e)[-500:], pictures_retries=tries)
+                counts["failed"] += 1
+                log.warning("pictures %s failed: %s", code, e)
+    return counts

@@ -63,6 +63,33 @@ def _missing_media(work: Path, code: str, meta: dict) -> bool:
     return False
 
 
+def update_meta(work: Path, code: str, **fields) -> dict:
+    """Merge ``fields`` into ``meta/<code>.json`` (created if missing) and return the record."""
+    path = work / "meta" / f"{code}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    meta = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"code": code}
+    meta.update(fields)
+    path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return meta
+
+
+def pictures_todo(work: Path, posts: dict[str, dict]) -> list[str]:
+    """Image posts whose slides the browser has not fetched yet, three attempts at most."""
+    out = []
+    for code in sorted(posts):
+        path = work / "meta" / f"{code}.json"
+        if not path.exists():
+            continue
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            meta.get("media_type") == "image"
+            and "slides" not in meta
+            and meta.get("pictures_retries", 0) < 3
+        ):
+            out.append(code)
+    return out
+
+
 def pending(work: Path, codes: list[str]) -> list[str]:
     """Codes not fetched yet, failed fewer than three times, or still missing their media."""
     out = []
