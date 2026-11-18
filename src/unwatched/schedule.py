@@ -1,13 +1,19 @@
-"""Register the daily job with Windows Task Scheduler."""
+"""Register the daily job: Task Scheduler on Windows, launchd on macOS, cron on Linux."""
 
 import json
+import os
 import platform
+import plistlib
+import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 TASK_NAME = "unwatched daily"
+LABEL = "com.unwatched.daily"
+PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
+CRON_TAG = "# unwatched daily"
 
 
 def build_register_script(exe: str, config: str, at: str) -> str:
@@ -27,17 +33,47 @@ def build_register_script(exe: str, config: str, at: str) -> str:
     )
 
 
-def _powershell(script: str) -> str:
+def build_launchd_plist(exe: str, config: str, at: str) -> str:
+    """A launchd agent: runs at the time each day, and at wake when the time was slept through."""
+    hour, minute = (int(x) for x in at.split(":"))
+    log = str(Path.home() / ".unwatched" / "launchd.log")
+    agent = {
+        "Label": LABEL,
+        "ProgramArguments": [exe, "run", "--config", config],
+        "StartCalendarInterval": {"Hour": hour, "Minute": minute},
+        "StandardOutPath": log,
+        "StandardErrorPath": log,
+    }
+    return plistlib.dumps(agent, sort_keys=False).decode("utf-8")
+
+
+def build_cron_line(exe: str, config: str, at: str) -> str:
+    """cron runs with a bare PATH and no display; the line carries both."""
+    hour, minute = (int(x) for x in at.split(":"))
+    command = f"DISPLAY=:0 {shlex.quote(exe)} run --config {shlex.quote(config)}"
+    return f"{minute} {hour} * * * {command} {CRON_TAG}"
+
+
+def _run(cmd: list[str], input: str | None = None) -> str:
     result = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        cmd, input=input, capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"powershell exited {result.returncode}")
+        raise RuntimeError(result.stderr.strip() or f"{cmd[0]} exited {result.returncode}")
     return result.stdout
+
+
+def _powershell(script: str) -> str:
+    return _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script])
+
+
+def _crontab() -> list[str]:
+    result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+    return result.stdout.splitlines() if result.returncode == 0 else []  # "no crontab" exits 1
+
+
+def _domain() -> str:
+    return f"gui/{os.getuid()}"
 
 
 def default_exe() -> str:
@@ -46,23 +82,44 @@ def default_exe() -> str:
 
 
 def install(at: str, config: Path, exe: Path | None = None) -> None:
-    if platform.system() != "Windows":
-        raise NotImplementedError(
-            "scheduling is Windows-only in v1; use cron: "
-            f"0 15 * * * unwatched run --config {config}"
-        )
-    _powershell(build_register_script(str(exe or default_exe()), str(config.resolve()), at))
+    exe_s, config_s = str(exe or default_exe()), str(config.resolve())
+    system = platform.system()
+    if system == "Windows":
+        _powershell(build_register_script(exe_s, config_s, at))
+    elif system == "Darwin":
+        PLIST.parent.mkdir(parents=True, exist_ok=True)
+        PLIST.write_text(build_launchd_plist(exe_s, config_s, at), encoding="utf-8")
+        subprocess.run(["launchctl", "bootout", _domain(), str(PLIST)], capture_output=True)
+        _run(["launchctl", "bootstrap", _domain(), str(PLIST)])
+    else:
+        lines = [line for line in _crontab() if not line.endswith(CRON_TAG)]
+        lines.append(build_cron_line(exe_s, config_s, at))
+        _run(["crontab", "-"], input="\n".join(lines) + "\n")
 
 
 def remove() -> None:
-    _powershell(f"Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false")
+    system = platform.system()
+    if system == "Windows":
+        _powershell(f"Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false")
+    elif system == "Darwin":
+        subprocess.run(["launchctl", "bootout", _domain(), str(PLIST)], capture_output=True)
+        PLIST.unlink(missing_ok=True)
+    else:
+        lines = [line for line in _crontab() if not line.endswith(CRON_TAG)]
+        _run(["crontab", "-"], input="\n".join(lines) + "\n")
 
 
 def status() -> dict:
-    out = _powershell(
-        f"$i = Get-ScheduledTaskInfo -TaskName '{TASK_NAME}'; "
-        "@{LastRunTime=$i.LastRunTime.ToString('yyyy-MM-dd HH:mm'); "
-        "NextRunTime=$i.NextRunTime.ToString('yyyy-MM-dd HH:mm'); "
-        "LastTaskResult=$i.LastTaskResult} | ConvertTo-Json"
-    )
-    return json.loads(out)
+    system = platform.system()
+    if system == "Windows":
+        out = _powershell(
+            f"$i = Get-ScheduledTaskInfo -TaskName '{TASK_NAME}'; "
+            "@{LastRunTime=$i.LastRunTime.ToString('yyyy-MM-dd HH:mm'); "
+            "NextRunTime=$i.NextRunTime.ToString('yyyy-MM-dd HH:mm'); "
+            "LastTaskResult=$i.LastTaskResult} | ConvertTo-Json"
+        )
+        return json.loads(out)
+    if system == "Darwin":
+        return {"installed": PLIST.exists(), "where": str(PLIST)}
+    line = next((line for line in _crontab() if line.endswith(CRON_TAG)), None)
+    return {"installed": line is not None, "where": line or "crontab"}
